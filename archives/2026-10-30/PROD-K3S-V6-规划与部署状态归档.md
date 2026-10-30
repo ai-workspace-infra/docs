@@ -125,7 +125,7 @@ PostgreSQL、Caddy、Web SaaS 共用 `distributed-web-saas-fullstack` chart 包�
 
 | 阶段 | 状态 | 工作内容 | 放行条件与当前缺口 |
 | --- | --- | --- | --- |
-| 0 Plan 证据、制品与容量准备 | ❌ 未完成 | IaC、GitOps、Playbooks、Orchestrator 默认由 `workflow_dispatch` 选择 `main`；记录本次成功运行解析到的 commit SHA 作为审计证据，不要求基础仓库另行打 tag。业务 chart 与镜像按不可变版本/digest 固定并核实可获取性，再完成渲染资源容量评审 | 最近一次 Resolve 已解析 IaC main 新 SHA，但 IaC Vault OIDC 角色仍拒绝主干工作流的 `job_workflow_ref`，未生成 Terraform plan；制品核验与全栈容量评审仍未完成。详见第 17.2 节 |
+| 0 Plan 证据、制品与容量准备 | ❌ 未完成 | IaC、GitOps、Playbooks、Orchestrator 默认由 `workflow_dispatch` 选择 `main`；记录本次成功运行解析到的 commit SHA 作为审计证据，不要求基础仓库另行打 tag。业务 chart 与镜像按不可变版本/digest 固定并核实可获取性，再完成渲染资源容量评审 | 最新运行 Resolve、IaC 自检和 Vault 认证通过；资源 plan 被 `create-only` 契约拒绝，提示包含更新、替换或删除，具体资源仍待核对。制品可获取性和全栈容量评审尚未完成。详见第 17.2.3 节 |
 | 1 IaC | ✅ 历史验收通过 | 新建独立节点、卷、网络并产出权威 CMDB | 有创建及归属验证记录；后续续建须刷新资源状态 |
 | 2 common | ✅ 历史验收通过 | hostname、系统管理/审计身份和主机安全基线 | `COMMON_NODE_VERIFIED`；业务身份须在各服务部署后分别验证 |
 | 3 存储与控制面 | ❌ 完整目标图待验收 | 核实新盘、安装固定 K3s/Flux、加载完整声明 | 基础引导已通过；完整新增 ESO/TLS 图的实际版本和健康仍需核实 |
@@ -602,3 +602,9 @@ GitOps [草稿 PR #673](https://github.com/ai-workspace-infra/gitops/pull/673) �
 因此，当前不再阻塞于编排器 IaC checkout 的旧 SHA；即时阻塞为 live Vault OIDC role claim 与受保护 `main` 工作流不匹配。完成 PR #1573 的声明修复、合并及受控角色同步后再重跑 plan。plan 成功后，阶段 0 仍需补齐业务制品可获取性和容量评审；plan 未通过前不得进入 `apply`。
 
 当前已有的制品/容量核验仍不足以放行：GitOps 中三个自有 OCI chart digest 已核对存在；部分私有服务镜像因未认证读取返回 401，不能记为存在性已验证；Observability stack 有五个容器未声明 CPU/内存 requests。当前渲染的自有工作负载 requests 汇总约为 0.57 CPU / 1344 MiB（不含上述缺失 requests、第三方 Vault/ESO/DataKit 及 K3s/系统预留）；声明 PVC 合计 50 GiB，但监控保留、数据库/日志增长和备份恢复空间预算未核定。因此 `2C4G` 与 100 GB 数据盘的全栈容量验收仍为 ❌。
+
+#### 17.2.3 最新 plan 验证
+
+[标准 plan 运行 41062767205](https://github.com/ai-workspace-infra/Platform-Orchestrator/actions/runs/41062767205) 的 Resolve 通过，Orchestrator 实际 SHA 为 `85818316dc31c5dec025a25bb4a1c477c06a86d7`，IaC 为 `1761ec99619678ca2b46817c327c3b1b53e8e41b`，GitOps 为 `0b55b1ed5609eeffb75a9f8a799fa4e8cbf19a8b`。Playbooks 仅选择 `main`，尚无执行 SHA 回执。
+
+IaC Vault 角色已同步至受保护 `main`，IaC 自检和凭据读取通过。[IaC 子运行 41062981727](https://github.com/ai-workspace-infra/Platform-Orchestrator/actions/runs/41062981727) 的 resources 阶段报告 `create-only target cannot update, replace or delete existing resources`，因此未产生成功 plan 回执。日志尚未说明受影响资源及具体动作；须核查 plan/state 和目标云资源后决定修复路径。该运行仅为 plan，没有 apply。第 0 阶段仍为 ❌。
