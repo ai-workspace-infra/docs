@@ -175,7 +175,18 @@ PostgreSQL、Caddy、Web SaaS 共用 `distributed-web-saas-fullstack` chart 包�
 
 公共 Vault JWT 身份与 V6 Vault 内部认证分开管理；不使用静态 Vault token 兜底，不输出证书私钥、token 或 DSN。
 
-### 6.2 跨 namespace 访问契约
+### 6.2 服务 KV 路径
+
+服务 KV 路径按 V6 所需收敛，不包含部署批次标识。路径是规划声明，不代表 Vault 记录、字段或 ESO 同步已实时验收。
+
+| 服务范围 | V6 KV 逻辑路径 | 使用边界 |
+| --- | --- | --- |
+| Accounts、Billing、Content 运行时及 OAuth 配置 | `kv/prod/accounts/runtime` | 三个服务按需从此路径映射运行时及 OAuth 配置；共享 token 也在此路径。目标 Kubernetes Secret 为 `web-saas-secrets`。OAuth 与其他敏感字段只交付给获准的消费者；若三者都挂载同一 Secret，则三者都能读取其中全部字段。 |
+| PostgreSQL DB | `kv/prod/database/postgresql` | PostgreSQL 初始化与运行所需身份凭据归入此路径范围；数据库侧仍按 admin、operator、auditor 三类身份分别授权。Vault KV 路径级策略不能隔离同一记录内的字段，ESO 读取身份和 Secret 投递范围需据此审查。 |
+
+V6 验收仍需确认上述路径的 Vault 实存与字段合同、ESO 映射和目标 Secret 内容，以及 PostgreSQL 三身份权限边界；在完成核验前均标记为未验收。旧记录的复制、迁移或退役不属于本节声明。
+
+### 6.3 跨 namespace 访问契约
 
 | 链路 | 规划要求 | 运行验收状态 |
 | --- | --- | --- |
@@ -187,7 +198,7 @@ PostgreSQL、Caddy、Web SaaS 共用 `distributed-web-saas-fullstack` chart 包�
 | V6 DNS 与无 DNS 路由验收 | 先以受控解析覆盖验证 Host/SNI 和 TLS，再按第 14 节添加 V6 专属 DNS；V5 DNS 不变 | ❌ 未验收 |
 | 外部 OAuth/Webhook | 无真实外部回调证据时不能标通过 | ❌ 未验收 |
 
-### 6.3 三权分立
+### 6.4 三权分立
 
 | 身份 | 职责与权限边界 | 已有状态 |
 | --- | --- | --- |
