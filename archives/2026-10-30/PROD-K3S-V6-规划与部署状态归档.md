@@ -493,3 +493,54 @@ flowchart LR
 2. 将 Orchestrator 根名解析与 Playbooks release-root 门禁合并到 main；按正式发布流程创建受保护的 Orchestrator `v6.*` tag，不能为一次 dispatch 临时创建或移动 tag。
 3. 补齐 `release-root`、Vault → PostgreSQL → Observability → Web SaaS → Ingress 服务部署与验收的受控阶段；当前冷启动 workflow 不覆盖这些阶段。
 4. IaC 完成后从本次 CMDB 回执核对节点 IPv4；随后由 DNS owner 仅为 `console-selfhost-prod-v6.svc.plus`、`accounts-selfhost-prod-v6.svc.plus`、`billing-selfhost-prod-v6.svc.plus`、`postgresql-selfhost-prod-v6.svc.plus`、`vault-selfhost-prod-v6.svc.plus`、`observability-k3s-v6.svc.plus` 新增解析。不得改 `console.svc.plus`、`accounts.svc.plus`、`billing.svc.plus`、`postgresql.svc.plus`、`vault.svc.plus`、`observability.svc.plus`。
+
+## 16. 服务凭据路径与 Vault 初始化方案确认（2026-10-30）
+
+本节记录用户最新确认，替代此前建议的 `kv/prod/services/prod-k3s-v6/...` 业务凭据前缀及“初始化托管方案待确认”的状态。**✅ 路径与托管规则已确认；❌ 记录存在性、字段适配、最小权限及运行验收尚未完成。** 文档更新不代表已读取、创建、复制或修改任何 Vault 记录。
+
+### 16.1 不带部署批次版本的服务 KV 路径
+
+| 服务/身份 | 确认的完整 KV 逻辑路径 | 使用边界 |
+| --- | --- | --- |
+| PostgreSQL `admin` | `kv/prod/database/postgresql/admin` | 初始化、DDL、恢复及必要管理；交付 `postgresql-prod/postgresql-superuser` 时仅供数据库管理使用，不注入业务工作负载 |
+| PostgreSQL `operator` | `kv/prod/database/postgresql/operator` | 日常数据库运行维护，按审核范围读写；不默认授予超级用户或任意系统操作 |
+| PostgreSQL `auditor` | `kv/prod/database/postgresql/auditor` | 独立只读，用于安全审计及授权迁移源读取；不具备目标写入、DDL 或提权权限 |
+| Accounts | `kv/prod/Accounts-service` | 按字段生成 Accounts 运行及数据库连接 Secret；应用连接使用限定 DML 的业务身份 |
+| Billing | `kv/prod/billing-service` | 按字段生成 Billing 运行及数据库连接 Secret；路径确认不自动启用真实扣款、生产 webhook 或迁移写入 |
+| Content | `kv/prod/Accounts-service` | 与 Accounts 共用 KV 路径，只向 Content Secret 映射所需字段 |
+
+Vault KV 路径区分大小写，`Accounts-service` 按用户指定保留大写 A。上述 Accounts/Billing 路径不再自动衍生批次、`runtime` 或 `database` 子记录；字段清单和 Secret 映射需在对应 ESO/Playbooks 实施中明确。PostgreSQL 三身份分别使用表中精确记录，不能只靠字段名宣称三权分立。
+
+Content 与 Accounts 共用 KV 记录时，Vault policy 读取粒度是整条记录；ESO 选择字段只限制目标 Secret 的内容，不提供 Vault 字段级访问隔离。
+
+本次去版本化针对本节服务凭据路径。OS 公钥仍按 `kv/prod/security/{root,operator,auditor}` 管理；Kubernetes 私钥、客户端证书与私有 kubeconfig 仍遵循 `kv/<environment>/<cluster>/<role>`，例如 `kv/prod/prod-k3s-v6/operator`。Kubernetes 记录绑定新集群 UID，CA 私钥保留 master，不因服务路径简化而跨集群复用。
+
+**稳定 KV 路径不等于自动复用密码或切换数据库目标。** V5/V6 并行时必须核对记录实际指向的数据库、身份和现有消费者；不得把 V5 的 DSN 原样交给 V6，也不得覆盖 V5 正在使用的记录。发现绑定冲突先停止对应交付，明确字段/连接绑定后再实施。
+
+### 16.2 公共 Vault 域名 TLS 来源
+
+| TLS 证书所属域 | 公共 Vault KV 逻辑路径 | 实施要求 |
+| --- | --- | --- |
+| `svc.plus` 及实际 SAN 覆盖的域名 | `kv/CICD/domains/svc.plus` | 路径不变；V6 的 `vault-server-tls` 和对应 Ingress TLS Secret 按实际域名映射 |
+| `xworktech.com` 及实际 SAN 覆盖的品牌域名 | `kv/CICD/domains/xworktech.com` | 保留独立来源；按实际路由域名选择证书，不能用 `svc.plus` 证书替代 |
+
+现有消费者使用 `tls_fullchain_pem_b64` 与 `tls_key_pem_b64`，实际字段存在性仍需验收。公共 Vault 地址仍为 `https://vault.svc.plus`，只读身份按所需精确路径授权；不因加入第二条来源就扩大为 `kv/CICD/domains/*`。
+
+TLS 同步必须验证证书有效期、完整链、证书与私钥匹配及实际 SNI/SAN。公共域名证书不自动覆盖 `*.svc.cluster.local`，集群内 Vault TLS 仍须使用有效验证名称或受控内部 SAN 证书，不能关闭校验。加入证书来源不增加 DNS 或公网路由授权；第 14 节 V6 专属域名及 canonical 禁止变更边界继续生效。
+
+### 16.3 Vault 初始化/unseal：外部安全托管与手动操作
+
+- ✅ 初始化及 unseal 材料采用外部安全托管；不在本节服务 KV 中新增 root token/unseal shares 记录。
+- ✅ 迁移过程中通过受控管理通道手动初始化新 Vault，并手动完成所需 unseal。本轮不引入自动初始化或 Transit/KMS auto-unseal。
+- 执行前核对实际新集群/实例及 Vault 的 `initialized`、`sealed` 状态；仅对未初始化的新目标执行 init。已初始化的实例不得重复初始化。
+- 新目标使用自己的初始化材料。旧 Raft 快照恢复、加入已有 Raft 集群及其材料使用采用对应恢复流程，不能将旧 unseal shares 当作新初始化材料。
+- root token、unseal shares 不交给 IaC/GitHub Actions，不写入 Git、workflow inputs、artifact、日志或聊天。流水线只观察 `initialized=true`、`sealed=false` 和服务健康，不输出材料。
+- ❌ 外部托管完成、手动初始化/unseal 及新 Vault 健康证据尚未验收。门禁未通过时停止后续服务验收，不能把安装成功记成 Vault 可用；完成后按同一候选继续，无需重新创建节点或存储。
+
+### 16.4 来源核对与当前实施状态
+
+V5 K3s 的业务 SecretStore 声明指向 `https://vault-raft.platform-vault.svc.cluster.local:8200`，其业务来源包括 `kv/prod/services/web-saas-k3s-v5/database`、`.../jwt`、`.../tls` 和 `.../brand-tls`。这些是旧集群内 Vault 的声明引用，不能据此认定公共 Vault 已有相同记录。旧 Selfhost/Compose 另有 `kv/prod/databases`、`kv/WEB_SAAS` 等入口，不作为 V6 的默认 fallback。
+
+来源文件：GitOps `services/distributed-web-saas-fullstack/prod/{external-secret,secret-store}.yaml`；Playbooks `roles/vhosts/vault_operator_material/README.md`；白皮书配套 `knowledge/docs/reference/platform-ops-toolkit/04-security-vault-and-iam/{kv_tier_model,manual-unseal}.md`。这里只核对路径、字段与规则，没有读取秘密值。
+
+GitOps [草稿 PR #673](https://github.com/ai-workspace-infra/gitops/pull/673) 正在清理 V6 混合暂停状态和已删除节点的旧回执引用。完整冷启动 DAG、三身份交付、ESO 字段映射及服务验收仍在配套实现，不能将本节确认写成部署完成。
