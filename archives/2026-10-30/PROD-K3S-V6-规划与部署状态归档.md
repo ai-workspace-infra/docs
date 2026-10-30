@@ -177,36 +177,14 @@ PostgreSQL、Caddy、Web SaaS 共用 `distributed-web-saas-fullstack` chart 包�
 
 ### 6.2 服务 KV 路径
 
-以下服务凭据路径不包含部署批次标识。路径确认只定义凭据存放位置与用途边界，不代表记录或字段已在 Vault 中实时验证，也不代表已完成迁移、初始化或 ESO 同步。
+服务 KV 路径按 V6 所需收敛，不包含部署批次标识。路径是规划声明，不代表 Vault 记录、字段或 ESO 同步已实时验收。
 
-| 服务/身份 | 确认的完整 KV 逻辑路径 | 使用边界 |
+| 服务范围 | V6 KV 逻辑路径 | 使用边界 |
 | --- | --- | --- |
-| PostgreSQL `admin` | `kv/prod/database/postgresql/admin` | 初始化、DDL、恢复及必要管理；交付 `postgresql-prod/postgresql-superuser` 时仅供数据库管理使用，不注入业务工作负载 |
-| PostgreSQL `operator` | `kv/prod/database/postgresql/operator` | 日常数据库运行维护，按审核范围读写；不默认授予超级用户或任意系统操作 |
-| PostgreSQL `auditor` | `kv/prod/database/postgresql/auditor` | 独立只读，用于安全审计及授权迁移源读取；不具备目标写入、DDL 或提权权限 |
-| Accounts | `kv/prod/accounts-service`；运行时共享项：`kv/prod/accounts/runtime`；OAuth：`kv/prod/accounts/runtime/oauth/github`、`kv/prod/accounts/runtime/oauth/google` | Accounts、Billing、Content 共用同一命名空间内的 `web-saas-secrets` 运行时 Secret；共享 token 从 `kv/prod/accounts/runtime#INTERNAL_SERVICE_TOKEN` 映射。OAuth 子路径按需读取，只交付 Accounts 必需字段 |
-| Billing | `kv/prod/billing-service`；共享 token：`kv/prod/accounts/runtime#INTERNAL_SERVICE_TOKEN` | 通过同一 `web-saas-secrets` 运行时 Secret 获取所需字段；Billing 凭据来自本服务路径。路径确认不自动启用真实扣款、生产 webhook 或迁移写入 |
-| Content | `kv/prod/accounts-service`；共享 token：`kv/prod/accounts/runtime#INTERNAL_SERVICE_TOKEN` | 通过同一 `web-saas-secrets` 运行时 Secret 获取所需字段；Content 与 Accounts 共用服务 KV 路径，只映射 Content 必需字段 |
+| Accounts、Billing、Content 运行时及 OAuth 配置 | `kv/prod/accounts/runtime` | 三个服务按需从此路径映射运行时及 OAuth 配置；共享 token 也在此路径。目标 Kubernetes Secret 为 `web-saas-secrets`。OAuth 与其他敏感字段只交付给获准的消费者；若三者都挂载同一 Secret，则三者都能读取其中全部字段。 |
+| PostgreSQL DB | `kv/prod/database/postgresql` | PostgreSQL 初始化与运行所需身份凭据归入此路径范围；数据库侧仍按 admin、operator、auditor 三类身份分别授权。Vault KV 路径级策略不能隔离同一记录内的字段，ESO 读取身份和 Secret 投递范围需据此审查。 |
 
-Accounts、Billing、Content 的目标是从同一个 `web-saas-secrets` Kubernetes Secret 注入运行时配置。Vault 中业务服务配置、Accounts 运行时共享 token、Accounts OAuth 子路径和 PostgreSQL 三身份凭据按既定 KV 路径管理，再由 GitOps ESO 显式映射。必须注意，同一个 Secret 若通过 `envFrom` 注入，各工作负载都能读取其中全部键；需限制 Secret 字段集合，不能把 admin、operator、auditor 或不属于该服务的支付/OAuth 密钥放入该共享 Secret。迁移、复制或退役旧路径须另行完成字段/消费者审查，并保留回滚与归档窗口。
-
-#### V5 K3s 来源与服务路径核对（2026-10-30）
-
-以下区分 V5 K3s 集群内 Vault 声明、既有公共 Vault 规范路径和实时工作负载引用；路径声明不证明 Vault 当前记录/字段存在，迁移计划也不代表已执行。
-
-| 服务/用途 | V5 K3s 中的来源或运行引用 | 规范路径/处理 | 核对结果 |
-| --- | --- | --- | --- |
-| Accounts、Billing 与 Content 共享 token | V5 K3s 来源为 `kv/prod/services/web-saas-k3s-v5/database#INTERNAL_SERVICE_TOKEN` | 统一映射至 `kv/prod/accounts/runtime#INTERNAL_SERVICE_TOKEN`，再进入共用 `web-saas-secrets` | ✅ SSH 只读检查确认 V5 两个业务 Deployment 共用 `web-saas-secrets`、Content 单独映射同一 token；❌ 新路径字段、值一致性及 ESO 目标 Secret 未验收 |
-| V5 Accounts/Billing Secret 的其余字段 | 同一旧 database 记录还映射数据库密码、`DATABASE_URL`、JWT bootstrap 字段和观测 token | 不把旧整条记录复制到新共享 Secret；按服务字段清单拆映射，DB 三身份改走 PostgreSQL 专用路径 | ✅ V5 引用关系已只读核对；❌ 各字段 owner 与 V6 最小消费集合待确认 |
-| Accounts JWT | `kv/prod/services/web-saas-k3s-v5/jwt#secret` | 需单独评审连续性；无连续性要求时在目标环境重新生成并评估会话失效，不并入共享 token 迁移 | ✅ 声明已核对；❌ 未验证实时记录/字段 |
-| Accounts OAuth GitHub | V5 K3s ExternalSecret 中未发现对应映射 | 路径定为 `kv/prod/accounts/runtime/oauth/github`；字段合同及授权消费者按需核对，不从 V5 database 记录复制 | ✅ 目标路径已按统一 runtime 层级规划；❌ Vault 实存及字段未实时核验 |
-| Accounts OAuth Google | V5 K3s ExternalSecret 中未发现对应映射 | 路径定为 `kv/prod/accounts/runtime/oauth/google`；字段合同及授权消费者按需核对，不从 V5 database 记录复制 | ✅ 目标路径已按统一 runtime 层级规划；❌ Vault 实存及字段未实时核验 |
-| Billing 支付凭据 | V5 K3s ExternalSecret 中未发现独立 Billing KV 映射 | 既有规范路径 `kv/prod/billing-service`；Stripe 字段留在原记录。共享 token 从 `kv/prod/accounts/runtime` 读取，不复制到 Billing 路径 | ✅ 白皮书列出该 Billing 路径；❌ Billing ESO 映射和生产支付验收未完成 |
-| Console 前端 | V5 `web-saas-console` Deployment 无 Secret、ConfigMap、Secret volume 引用；环境变量仅有 `PORT`，无挂载卷，运行固定 digest 镜像 | 不需要迁移服务端 Vault 凭据；实时 Caddy ConfigMap 将 Console 的 `/api` 转发至 Accounts，其余前端配置随镜像/浏览器加载；当前检查未证明静态 bundle 内具体 API 配置 | ✅ SSH 只读检查 Deployment generation/observedGeneration 均为 9，且实时 Caddy 路由已核对；❌ 镜像内静态配置内容未检查 |
-
-V5 运行态检查目标为 `root@104.105.141.213`，只读取 Deployment、ExternalSecret 与 Caddy ConfigMap 的引用元数据，没有读取 Kubernetes Secret 值。V5 `SecretStore` 指向集群内 `https://vault-raft.platform-vault.svc.cluster.local:8200`、KV v2 mount `kv`；V5 源 Vault 与公共 Vault 是不同实例/访问域，迁移时必须分别提供受限源读身份和目标写身份。公开输出中不记录凭据、环境变量值或 Secret 数据。
-
-迁移预览脚本和待审计划位于本机权限受限目录 `~/.codex/private-data/`：`v5_service_kv_migration_preview.sh`、`v5-accounts-token-migration-plan.json`。计划将 V5 shared token 候选映射至 `kv/prod/accounts/runtime`，状态为 `review_required`；脚本只运行 Vault KV 迁移工具的预览模式，不连接 Vault。OAuth GitHub/Google 目标子路径统一规划为 `kv/prod/accounts/runtime/oauth/{github,google}`，实存、字段合同和消费者仍待核验。PostgreSQL 新路径与 `web-saas-secrets` ESO 字段映射需由 GitOps 声明分别实现。执行任何复制前必须完成 owner 审批并确认目标字段合同和 Vault 权限。所有 V5 来源暂不删除。
+V6 验收仍需确认上述路径的 Vault 实存与字段合同、ESO 映射和目标 Secret 内容，以及 PostgreSQL 三身份权限边界；在完成核验前均标记为未验收。旧记录的复制、迁移或退役不属于本节声明。
 
 ### 6.3 跨 namespace 访问契约
 
