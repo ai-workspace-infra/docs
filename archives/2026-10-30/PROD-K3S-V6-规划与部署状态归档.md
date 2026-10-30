@@ -125,7 +125,7 @@ PostgreSQL、Caddy、Web SaaS 共用 `distributed-web-saas-fullstack` chart 包�
 
 | 阶段 | 状态 | 工作内容 | 放行条件与当前缺口 |
 | --- | --- | --- | --- |
-| 0 固定候选 | ❌ 未完成 | 固定 GitOps、IaC、Playbooks、编排版本及 chart/镜像 digest | 虽已有固定版本记录，完整候选矩阵、制品存在性及全栈容量评审仍需收敛 |
+| 0 固定候选 | ❌ 未完成 | 记录一次成功 plan 实际解析出的基础仓库 commit SHA，并固定业务 chart 与镜像制品 | 不是缺少 `main` 选择规则，而是失败的 IaC 子运行仍拿到旧 SHA，且未产出成功 plan；chart/镜像制品矩阵、制品存在性和基于渲染资源的全栈容量评审也没有证据。详见第 17.2 节 |
 | 1 IaC | ✅ 历史验收通过 | 新建独立节点、卷、网络并产出权威 CMDB | 有创建及归属验证记录；后续续建须刷新资源状态 |
 | 2 common | ✅ 历史验收通过 | hostname、系统管理/审计身份和主机安全基线 | `COMMON_NODE_VERIFIED`；业务身份须在各服务部署后分别验证 |
 | 3 存储与控制面 | ❌ 完整目标图待验收 | 核实新盘、安装固定 K3s/Flux、加载完整声明 | 基础引导已通过；完整新增 ESO/TLS 图的实际版本和健康仍需核实 |
@@ -183,8 +183,9 @@ PostgreSQL、Caddy、Web SaaS 共用 `distributed-web-saas-fullstack` chart 包�
 | --- | --- | --- |
 | Accounts、Billing、Content 运行时及 OAuth 配置 | `kv/prod/accounts/runtime` | 三个服务按需从此路径映射运行时及 OAuth 配置；共享 token 也在此路径。目标 Kubernetes Secret 为 `web-saas-secrets`。OAuth 与其他敏感字段只交付给获准的消费者；若三者都挂载同一 Secret，则三者都能读取其中全部字段。 |
 | PostgreSQL DB | `kv/prod/database/postgresql` | PostgreSQL 初始化与运行所需身份凭据归入此路径范围；数据库侧仍按 admin、operator、auditor 三类身份分别授权。Vault KV 路径级策略不能隔离同一记录内的字段，ESO 读取身份和 Secret 投递范围需据此审查。 |
+| 域名 TLS | 公共 Vault `kv/CICD/domains/svc.plus`、`kv/CICD/domains/xworktech.com` | V6 按域名读取现有公共证书来源；不复制或迁移 V5 私有证书内容。具体证书字段与同步目标须在部署验收时核对。 |
 
-V6 验收仍需确认上述路径的 Vault 实存与字段合同、ESO 映射和目标 Secret 内容，以及 PostgreSQL 三身份权限边界；在完成核验前均标记为未验收。旧记录的复制、迁移或退役不属于本节声明。
+V6 验收仍需确认上述路径的 Vault 实存与字段合同、ESO 映射和目标 Secret 内容，以及 PostgreSQL 三身份权限边界；在完成核验前均标记为未验收。Vault 首次初始化和 unseal 材料由外部安全托管；新集群迁移时须人工初始化与解封，不将这些材料写入上述常规 KV 运行时路径。旧记录的复制、迁移或退役不属于本节声明。
 
 ### 6.3 跨 namespace 访问契约
 
@@ -555,3 +556,44 @@ V5 K3s 的业务 SecretStore 声明指向 `https://vault-raft.platform-vault.svc
 来源文件：GitOps `services/distributed-web-saas-fullstack/prod/{external-secret,secret-store}.yaml`；Playbooks `roles/vhosts/vault_operator_material/README.md`；白皮书配套 `knowledge/docs/reference/platform-ops-toolkit/04-security-vault-and-iam/{kv_tier_model,manual-unseal}.md`。这里只核对路径、字段与规则，没有读取秘密值。
 
 GitOps [草稿 PR #673](https://github.com/ai-workspace-infra/gitops/pull/673) 正在清理 V6 混合暂停状态和已删除节点的旧回执引用。完整冷启动 DAG、三身份交付、ESO 字段映射及服务验收仍在配套实现，不能将本节确认写成部署完成。
+
+## 17. 2026-10-30 IaC 环境契约修复与生产 plan 重跑
+
+### 17.1 IaC 代际环境契约
+
+| 项目 | 状态 | 证据与说明 |
+| --- | --- | --- |
+| 发现的问题 | ✅ 已定位 | Orchestrator 将 `prod-v6` 作为 IaC 请求的环境 selector；IaC target 声明环境为规范值 `prod`，导致自检报 `ContractError: unsupported environment`。失败运行：[IaC 子运行 41057732086](https://github.com/ai-workspace-infra/Platform-Orchestrator/actions/runs/41057732086)；失败点 `iac-self-check`，资源 plan 未生成。 |
+| 验证边界 | ✅ 已明确 | IaC 只检查 IaCTarget、资源 manifest、state key 和 owner 契约；不读取 Flux Kustomization、HelmRelease 或应用发布对象。 |
+| 环境映射 | ✅ 已合并 | IaC 将 `prod-v<整数>` 请求 selector 映射为 canonical `prod` 查询/审批环境。PR [iac_modules #498](https://github.com/ai-workspace-infra/iac_modules/pull/498)，合并 SHA `1761ec99619678ca2b46817c327c3b1b53e8e41b`。 |
+| state/workspace 隔离 | ✅ 契约测试通过 | `prod-k3s-v6` workspace、namespace 和声明 state key 不经环境归一而改变；新增代际 selector 回归测试。IaC target contract suite 14 项通过。 |
+| 本轮生产 plan | ❌ 待重跑 | 本次只完成代码修复与 IaC PR 合并核验，还未以新 IaC main 重跑 Orchestrator plan；没有可供 apply 的 Terraform 计划。 |
+| 生产变更 | ❌ 未执行 | 现有失败运行在 IaC 准备阶段停止；没有资源 apply、DNS 更新、服务部署或数据迁移。 |
+
+### 17.2 后续执行记录
+
+使用已核准的同一组参数重跑 `operation=plan`：Orchestrator main、IaC main、GitOps main、`vault_env_path=prod-v6`、Akamai `manbuzhe2026`、`2C4G`、`web-saas`、`dns_mode=none`、关闭外部 Agent Proxy 与 Stripe 同步。记录运行 ID、实际三仓 SHA、Resolve 状态、IaC plan 摘要、增删改/替换项及最终回执；只有 plan 成功且资源范围符合独立新节点和数据盘声明，才进入 apply。V5 canonical DNS 仍不得修改。
+
+#### 17.2.1 最近一次标准 plan 与 IaC 来源阻塞
+
+| 检查项 | 状态 | 运行证据 |
+| --- | --- | --- |
+| 标准 plan 参数 | ✅ 已记录 | Orchestrator 运行 [41057533113](https://github.com/ai-workspace-infra/Platform-Orchestrator/actions/runs/41057533113)：`operation=plan`、基础仓库选择 `main`、目标范围 `web-saas`、DNS 关闭、外部代理和 Stripe 同步关闭 |
+| Resolve | ✅ 通过 | Orchestrator `7b1122351301c3a0048257c72d7a1fab53f66897`；解析到独立代际 state/workspace 和独立目标声明，未执行资源变更 |
+| GitOps source SHA | ✅ 已解析 | `0b55b1ed5609eeffb75a9f8a799fa4e8cbf19a8b` |
+| IaC source SHA | ❌ 旧引用 | Resolve 输出 `f889d68cb91434f7d18a72731e496d5e71a6f571`，不是包含代际环境修复的 IaC main |
+| IaC 子运行 | ❌ 失败 | 子运行 [41057679256](https://github.com/ai-workspace-infra/iac_modules/actions/runs/41057679256)；`ContractError: unsupported environment`，未生成 Terraform plan |
+| Playbooks | ⏸ 未执行 | 本次 `operation=plan` 在 IaC 阶段失败；只解析到选择值 `main`，没有 Playbooks 执行或成功回执 |
+| IaC 来源修复 | ⏳ PR 待合并 | Orchestrator [PR #1572](https://github.com/ai-workspace-infra/Platform-Orchestrator/pull/1572) 改为 checkout Resolve 输出的 `infra_ref`；该 ref 由 `source_ref` 选择，默认 `main`。PR 检查完成并合并前，不能认为新 IaC SHA 已进入调用链 |
+
+#### 17.2.2 第 0 阶段尚未完成的具体内容
+
+这条没有因 IaC PR #498 合并而自动修复。#498 已将 `prod-vN` 归一为 IaC 查询环境 `prod`，同时保留 `prod-k3s-v6` 独立 state；但上次 Orchestrator Resolve 仍检出旧 IaC SHA，所以运行未消费该修复。#1572 只修复 IaC 来源选择，合并后还必须重跑同一组 `plan` 并审查 IaC 回执。
+
+成功 plan 仍不足以单独完成固定候选。阶段 0 还缺：
+
+1. 一份来自成功运行的候选清单，记录 Orchestrator 运行 commit、IaC/GitOps/Playbooks 实际 commit SHA；基础仓库可由 `main` 选择，但审计记录要保存运行实际解析到的 SHA。失败运行里的 `playbooks_ref=main` 不是 Playbooks 已执行或已验收的证据。
+2. 按各 HelmRelease 记录 chart 名、精确版本/不可变制品标识及仓库中制品存在性；按 UI/API 工作负载记录 image tag/digest。不能用 GitOps commit SHA 替代 chart/image 制品固定，也不能只凭 values 文件存在认定制品可拉取。
+3. 对最终固定 chart values 渲染后的所有 Pod 汇总 CPU/内存 requests/limits、系统与 K3s 预留、发布峰值、PostgreSQL 内存/连接预算；同时核验 100 GB 数据盘上监控保留、日志增长、数据库数据及备份/恢复空间。当前归档没有这些渲染与预算回执，因此 `2C4G` 的全栈容量评审仍未完成。
+
+因此，PR #1572 合并前当前阻塞在“编排器 IaC checkout 仍锁旧 SHA”；合并且 plan 成功后，阶段 0 仍需补齐业务制品存在性与容量评审。plan 未通过前不得进入 `apply`。
