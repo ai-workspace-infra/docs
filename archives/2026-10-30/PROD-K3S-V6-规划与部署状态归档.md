@@ -1,5 +1,11 @@
 # PROD-K3S-V6 独立节点、集群冷启动规划与部署状态归档
 
+> 关联目标草案：[环境与业务发布解析：最小实施草案](环境与业务发布解析-最小实施草案.md)。草案统一五仓职责、SIT 功能泳道、UAT/PROD、发布 tag、GitOps 目标和 state 交接；它不是当前部署或验收回执。本归档后续历史记录按其时间保留，遇到规则变化以草案中的当前约定及实际运行证据为准。
+
+**关联文档**：[K3s role 职责与依赖清单](K3s-role职责与依赖清单.md) · [Linux OS 三类操作身份：最小实施草案](Linux-OS三类操作身份-最小实施草案.md) · [环境与业务发布解析：最小实施草案](环境与业务发布解析-最小实施草案.md)。
+
+> 最新补充：运行 [41200258539](https://github.com/ai-workspace-infra/Platform-Orchestrator/actions/runs/41200258539) 的 Resolve 与 IaC/Provision 通过，Deploy 在 operator 登录 HOME 检查失败；[Playbooks #927](https://github.com/ai-workspace-infra/playbooks/pull/927) 待合并。实际主机安全基线调用和完整回执仍有缺口，详见关联的 K3s role 清单。
+
 ## 本轮执行与阻断更新（2026-10-31 17:20 Asia/Shanghai）
 
 本节优先于下文较早的状态快照。核对来源为 GitHub Actions 与对应 owner PR；本轮没有重新 SSH 登录节点，也没有执行节点初始化、K3s/Flux、服务部署、数据迁移或 DNS 操作。
