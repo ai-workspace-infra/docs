@@ -608,3 +608,20 @@ GitOps [草稿 PR #673](https://github.com/ai-workspace-infra/gitops/pull/673) �
 [标准 plan 运行 41062767205](https://github.com/ai-workspace-infra/Platform-Orchestrator/actions/runs/41062767205) 的 Resolve 通过，Orchestrator 实际 SHA 为 `85818316dc31c5dec025a25bb4a1c477c06a86d7`，IaC 为 `1761ec99619678ca2b46817c327c3b1b53e8e41b`，GitOps 为 `0b55b1ed5609eeffb75a9f8a799fa4e8cbf19a8b`。Playbooks 仅选择 `main`，尚无执行 SHA 回执。
 
 IaC Vault 角色已同步至受保护 `main`，IaC 自检和凭据读取通过。[IaC 子运行 41062981727](https://github.com/ai-workspace-infra/Platform-Orchestrator/actions/runs/41062981727) 的 resources 阶段报告 `create-only target cannot update, replace or delete existing resources`，因此未产生成功 plan 回执。日志尚未说明受影响资源及具体动作；须核查 plan/state 和目标云资源后决定修复路径。该运行仅为 plan，没有 apply。第 0 阶段仍为 ❌。
+
+#### 17.2.4 最新 IaC plan：独立数据盘存在 update（2026-10-31）
+
+本节记录截至 2026-10-31 北京时间的只读核验，覆盖上文 17.2.1 对即时阻塞的历史判断。GitHub 运行回执与集群、云资源的当前实时状态分开记录。
+
+| 检查项 | 状态 | 证据与范围 |
+| --- | --- | --- |
+| 历史 Vault 角色声明 | ✅ 代码已合并 | Orchestrator [#1573](https://github.com/ai-workspace-infra/Platform-Orchestrator/pull/1573) 已合并；17.2.3 记录后续 Vault 身份与 IaC 自检通过。不能据此推断当前 live role 未发生漂移。 |
+| 历史 resolver 清理 | ✅ 代码已合并 | Orchestrator [#1574](https://github.com/ai-workspace-infra/Platform-Orchestrator/pull/1574) 已合并。 |
+| 最新手动主线 | ❌ 失败 | [41087855158](https://github.com/ai-workspace-infra/Platform-Orchestrator/actions/runs/41087855158)，Orchestrator SHA `85818316dc31c5dec025a25bb4a1c477c06a86d7`；Resolve 成功，IaC & Provision 失败，后续 Deploy、Migrate、Verify 均跳过。 |
+| 失败定位 | ✅ 已定位至资源与动作 | IaC 子运行 [41088084894](https://github.com/ai-workspace-infra/Platform-Orchestrator/actions/runs/41088084894) 为 `plan / prod`。`module.volume_prod_k3s_v6.linode_volume.this` 的计划动作为 `update`，create-only 规则拒绝；日志未给出变更字段和值。不得据此断言具体漂移原因。 |
+| 实际变更 | ✅ 本次 IaC 子运行仅为 plan | 本次未执行 IaC apply；不可由此推断更早运行或当前云端资源状态。 |
+| 脱敏诊断能力 | ⏳ 待合并 | IaC [#500](https://github.com/ai-workspace-infra/iac_modules/pull/500) 仅增加卷变更字段名的白名单诊断，不打印字段值，不放行 update/replace/delete；截至本次核验 PR 开放，相关检查通过。 |
+| 图表与容量声明 | ✅ GitOps 改动已合并 | GitOps [#674](https://github.com/ai-workspace-infra/gitops/pull/674) 已合并，涉及镜像固定和资源预算；其合入不等于当前私有制品可拉取、2C4G 全栈容量或实际运行已验收。 |
+| 重新部署与验收 | ❌ 未完成 | 最新计划失败；当前节点、数据盘、Terraform state、Flux、服务和专用域名的实时状态尚未在本次核验。历史节点回执不能替代重建后的事实。 |
+
+下一步：合入并采用 IaC #500 后，以 `main` 解析为本次实际 SHA，按已约定的 `prod-v6` / `web-saas` / `akamai-cloud` / `manbuzhe2026` / `2C4G` 参数执行只读 plan，保留 `dns_mode=none`、关闭外部 Agent Proxy 与 Stripe 同步。使用脱敏字段名称结合 state 和云资源只读事实，判断为何卷计划更新；核对目标卷身份、绑定及数据保留，不能绕过 create-only 或对现有持久卷直接更新、替换、删除。诊断 PR 或计划成功均不等同于业务验收。V5 canonical DNS 不得修改；V6 专用记录若另行执行须限定具体目标与范围。
