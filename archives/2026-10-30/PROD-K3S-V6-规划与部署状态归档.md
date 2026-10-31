@@ -127,7 +127,7 @@ PostgreSQL、Caddy、Web SaaS 共用 `distributed-web-saas-fullstack` chart 包�
 | --- | --- | --- | --- |
 | 0 Plan 证据、制品与容量准备 | ❌ 未完成 | IaC、GitOps、Playbooks、Orchestrator 默认由 `workflow_dispatch` 选择 `main`；记录本次成功运行解析到的 commit SHA 作为审计证据，不要求基础仓库另行打 tag。业务 chart 与镜像按不可变版本/digest 固定并核实可获取性，再完成渲染资源容量评审 | 最新运行 Resolve、IaC 自检和 Vault 认证通过；资源 plan 被 `create-only` 契约拒绝，提示包含更新、替换或删除，具体资源仍待核对。制品可获取性和全栈容量评审尚未完成。详见第 17.2.3 节 |
 | 1 IaC | ✅ 历史验收通过 | 新建独立节点、卷、网络并产出权威 CMDB | 有创建及归属验证记录；后续续建须刷新资源状态 |
-| 2 common | ✅ 历史验收通过 | hostname、系统管理/审计身份和主机安全基线 | `COMMON_NODE_VERIFIED`；业务身份须在各服务部署后分别验证 |
+| 2 common | ❌ 未完成 | 新节点 hostname、三类 OS 身份及主机安全基线 | hostname 与三身份 SSH 登录和部分拒绝检查已验证；旧 `COMMON_NODE_VERIFIED` 是此前节点的历史回执，不能证明新节点完整验收。安全基线、业务身份及 K3s 身份仍需验证，见 17.2.8。 |
 | 3 存储与控制面 | ❌ 完整目标图待验收 | 核实新盘、安装固定 K3s/Flux、加载完整声明 | 基础引导已通过；完整新增 ESO/TLS 图的实际版本和健康仍需核实 |
 | 4 管理根 | ❌ 待核实 | 启用管理 source/root | 现场已 active；当前 revision、generation 和 Ready 未完成验收 |
 | 5 ESO 与 TLS 身份 | ❌ 部分完成 | ESO、专用 SA/RBAC、公共 Vault JWT 身份 | JWT allow/deny 已通过；ESO 实际版本和 Ready、身份声明实际 revision 待核实 |
@@ -661,3 +661,14 @@ IaC Vault 角色已同步至受保护 `main`，IaC 自检和凭据读取通过�
 | OS、K3s、Flux 和服务验收 | ❌ 未完成 | 新节点 SSH 只读检查 hostname 为 `localhost`，尚无 `operator`、`auditor` 或 K3s；[Deploy 子运行](https://github.com/ai-workspace-infra/Platform-Orchestrator/actions/runs/41165920242) 在 infra 模式跳过主机 bootstrap 和业务部署。须执行 `vhosts/common`、K3s bootstrap 与后续验收。 |
 
 下一步入口核对：Playbooks `a669bc21b28888c8445275ef8805a6984751d42d` 中 `prod_k3s_generation_bootstrap.yml` 仍固定 V6 与 `declarative_paused`，其 `node_bootstrap.yml` 仍使用 `cluster-audit`；这与通用批次、Flux 自动调谐及 `root`/`operator`/`auditor` 方案不一致。`os_identity.yml` 是单独的三身份入口，尚未证实由该 bootstrap 正式接入。不能将旧入口的审计检查当作三账户初始化验收，须先贯通并验证实际调用链。
+
+#### 17.2.8 新节点 OS 初始化与验收（2026-10-31）
+
+| 项目 | 状态 | 本次证据和剩余工作 |
+| --- | --- | --- |
+| 主机名 | ✅ 已验证 | `hostname`、`/etc/hostname` 和本地解析均为 `prod-k3s-v6`；cloud-init 设置 `preserve_hostname: true`。尚未执行重启持久性验证。 |
+| OS 三身份 | ✅ 登录及部分权限检查通过 | 使用 Playbooks main `a669bc21b28888c8445275ef8805a6984751d42d` 的 `vhosts/common` OS 身份任务初始化；`root`、`operator`、`auditor` 均以真实身份 SSH 登录，后两者使用同名主组。operator 仅验证受限 sudo；auditor 验证状态读取、拒绝 sudo、读取 `/etc/shadow` 和写 `/etc`。三账户暂用同一 SSH 公钥，持钥者可登录三个身份。 |
+| 旧审计账户代码 | ⏳ PR 待审 | 新节点不存在旧账号；[Playbooks #896](https://github.com/ai-workspace-infra/playbooks/pull/896) 移除旧创建入口并接入三身份，K3s 身份和其他仓库回执消费仍需单独贯通。 |
+| 主机安全基线 | ❌ 未完成 | SSH 公钥策略、禁用密码、sshd/sudo 配置语法通过；本次只读检查 `fail2ban`、`auditd`、UFW 服务不活跃，未断言云防火墙配置或完整基线符合性。 |
+| 旧 state 清理 | ❌ 未完成 | 旧 state 对象仍存在，存储桶未显示版本控制；旧卷和防火墙仍存在，GitOps 将旧 state 声明为只读迁移来源。须先完成安全归档、恢复验证及声明/资源所有权处理，不能直接删除后失去追踪。 |
+| K3s、Flux 与业务 | ❌ 未执行 | 三类 Kubernetes 认证/RBAC、服务及业务身份尚未验收。 |
