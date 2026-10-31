@@ -648,3 +648,13 @@ IaC Vault 角色已同步至受保护 `main`，IaC 自检和凭据读取通过�
 | IaC 渲染能力 | ⏳ PR 待合并 | [IaC #502](https://github.com/ai-workspace-infra/iac_modules/pull/502) 允许从 YAML 声明防火墙 label，沿用默认行为并校验 provider 约束。必须先合入 #502，后合入 GitOps #678。 |
 | 离线验证 | ✅ 通过 | Akamai 渲染器 19 项、IaC target catalog 14 项测试通过；目录迁移校验保留 17 个历史 state key；V6 selector 命中新 namespace，渲染产出原 node 名、新 firewall 名和带 `prevent_destroy` 的新 volume module，Terraform fmt 检查通过。 |
 | 实际资源创建、初始化和验收 | ❌ 未执行 | 本次只执行 plan 与读取，不执行 apply、数据迁移或 DNS 操作；两项 PR 合入后仍需重新以 main 解析运行候选、验证独立 state 的实际 plan，再按授权推进创建与冷启动。 |
+
+#### 17.2.7 新 state 的 plan 与基础设施执行（2026-10-31）
+
+| 项目 | 状态 | 证据与范围 |
+| --- | --- | --- |
+| 候选合入 | ✅ 完成 | IaC [#502](https://github.com/ai-workspace-infra/iac_modules/pull/502) 与 GitOps [#678](https://github.com/ai-workspace-infra/gitops/pull/678) 已合并。17.2.6 中的待合并状态为当时记录。 |
+| 新 state plan | ✅ 通过 | [主运行](https://github.com/ai-workspace-infra/Platform-Orchestrator/actions/runs/41165140821)，[IaC 回执](https://github.com/ai-workspace-infra/Platform-Orchestrator/actions/runs/41165237022)：新 state 计划 create 3、update 0、delete 0。此结果只覆盖新 state。 |
+| 解析版本 | ✅ 已记录 | Orchestrator `ea4c859b0d3b72635344a3923dcd8026cb99363a`；IaC `ab85e5ae3bdbc4f2518ae90580d053a0d4a74a35`；GitOps `f36d4d60be137adfb29930df8b59f3fd523c3cc2`。基础仓库默认选 `main`，SHA 为本次运行证据。 |
+| 基础设施 apply | ⏳ 执行中 | [主运行](https://github.com/ai-workspace-infra/Platform-Orchestrator/actions/runs/41165583019)，[IaC 子运行](https://github.com/ai-workspace-infra/Platform-Orchestrator/actions/runs/41165683851)。`operation=infra`、`dns_mode=none`；不得把正在执行当作创建成功。 |
+| OS、K3s、Flux 和服务验收 | ❌ 未完成 | 等待各自真实执行与回执；本次 plan 不代表已初始化或部署。旧数据盘与旧 state 保留，创建后须再次只读核验。 |
