@@ -1,5 +1,17 @@
 # PROD-K3S-V6 独立节点、集群冷启动规划与部署状态归档
 
+## 当前状态补充（2026-10-31）
+
+以下记录覆盖下文与当前节点冲突的历史状态；历史回执不代表当前节点验收通过。
+
+| 项目 | 状态与证据 |
+| --- | --- |
+| 节点与盘 | ❌ 只读 SSH 核验：hostname 为 `prod-k3s-v6`，100 GB `sdc` 无文件系统、无挂载点；K3s 服务未运行。盘初始化与挂载尚未执行验收。 |
+| common | ❌ 当前节点尚无包含独立盘和完整安全基线的就绪回执。[Playbooks #916](https://github.com/ai-workspace-infra/playbooks/pull/916) 已将独立盘挂载与 UUID 纳入 K3s 主线 common 回执条件。 |
+| 调用链 | ❌ [Orchestrator #1583](https://github.com/ai-workspace-infra/Platform-Orchestrator/pull/1583) 为草稿候选；CMDB、GitOps 声明及 K3s owner 交接尚无完整运行回执。 |
+| 三身份与 Vault writer | ❌ [Playbooks #918](https://github.com/ai-workspace-infra/playbooks/pull/918) 和 [GitOps #683](https://github.com/ai-workspace-infra/gitops/pull/683) 为草稿候选；需合并并受控应用 writer 配置，验证精确路径允许、相邻路径拒绝及真实身份 RBAC。 |
+| Flux、服务及 DNS | ❌ 尚无当前节点 Flux 接管、Vault、数据库、监控、Web SaaS 或 Ingress 实际验收；未据历史回执认定完成。V5 与 canonical DNS 保持不变。 |
+
 > 归档日期：2026-10-30（北京时间，UTC+08:00）。
 >
 > ✅ 本轮规划和状态记录已归档。❌ V6 全量服务部署、数据与业务验收尚未完成。
@@ -127,7 +139,7 @@ PostgreSQL、Caddy、Web SaaS 共用 `distributed-web-saas-fullstack` chart 包�
 | --- | --- | --- | --- |
 | 0 Plan 证据、制品与容量准备 | ❌ 未完成 | IaC、GitOps、Playbooks、Orchestrator 默认由 `workflow_dispatch` 选择 `main`；记录本次成功运行解析到的 commit SHA 作为审计证据，不要求基础仓库另行打 tag。业务 chart 与镜像按不可变版本/digest 固定并核实可获取性，再完成渲染资源容量评审 | 新 state 的 [plan](https://github.com/ai-workspace-infra/Platform-Orchestrator/actions/runs/41165140821) 已通过，create 3、update 0、delete 0；业务制品可获取性和全栈容量评审仍缺完整证据。详见 17.2.7。 |
 | 1 IaC | ✅ 新资源已核验 | 新建独立节点、卷、网络并产出权威 CMDB | 新节点及 100 GB 新卷已创建并核验绑定；旧卷保留。IaC #504 合入后须重新生成并核验使用节点名的 CMDB。详见 17.2.7。 |
-| 2 common | ✅ 历史验收通过 | hostname、系统管理/审计身份和主机安全基线 | `COMMON_NODE_VERIFIED`；业务身份须在各服务部署后分别验证 |
+| 2 common | ❌ 当前节点未完成 | hostname、三账户、独立盘和主机安全基线 | 历史回执不适用于重建节点；当前 100 GB 盘未挂载，完整安全基线及新回执待验收 |
 | 3 存储与控制面 | ❌ 完整目标图待验收 | 核实新盘、安装固定 K3s/Flux、加载完整声明 | 新节点尚未安装 K3s；需先完成 common 安全基线，再验证新盘、K3s、三身份和 Flux。历史节点引导回执不能复用。 |
 | 4 管理根 | ❌ 待核实 | 启用管理 source/root | 新节点尚未安装 Flux；root/source 实际 revision、generation 和 Ready 均待验收。 |
 | 5 ESO 与 TLS 身份 | ❌ 部分完成 | ESO、专用 SA/RBAC、公共 Vault JWT 身份 | 历史 JWT allow/deny 回执不代表新集群 ESO 已部署；新集群身份、实际版本和 Ready 待验收。 |
