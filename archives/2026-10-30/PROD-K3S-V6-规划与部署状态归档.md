@@ -6,10 +6,11 @@
 
 | 项目 | 状态与证据 |
 | --- | --- |
-| 节点与盘 | ❌ 只读 SSH 核验：hostname 为 `prod-k3s-v6`，100 GB `sdc` 无文件系统、无挂载点；K3s 服务未运行。盘初始化与挂载尚未执行验收。 |
+| 节点与盘 | ❌ 只读 SSH 核验：hostname 为 `prod-k3s-v6`，100 GB `sdc` 无文件系统、无挂载点；K3s 服务未运行。盘初始化与挂载尚未执行验收。候选已将云盘长标签与 ext4 文件系统标签分开，避免超过 16 字节的校验失败。 |
 | common | ❌ 当前节点尚无包含独立盘和完整安全基线的就绪回执。[Playbooks #916](https://github.com/ai-workspace-infra/playbooks/pull/916) 已将独立盘挂载与 UUID 纳入 K3s 主线 common 回执条件。 |
 | 调用链 | ❌ [Orchestrator #1583](https://github.com/ai-workspace-infra/Platform-Orchestrator/pull/1583) 为草稿候选；候选按 CMDB `deployment_mode` 区分 Kubernetes 与传统 Web SaaS 主机，避免 K3s 进入传统主机部署和凭据初始化；CMDB、GitOps 声明及 K3s owner 交接尚无完整运行回执。 |
 | 三身份与 Vault writer | ❌ [Playbooks #918](https://github.com/ai-workspace-infra/playbooks/pull/918) 和 [GitOps #683](https://github.com/ai-workspace-infra/gitops/pull/683) 为草稿候选；需合并并受控应用 writer 配置，验证精确路径允许、相邻路径拒绝及真实身份 RBAC。 |
+| 服务凭据来源 | ❌ 只读检查证实 PostgreSQL 三个角色记录及 `kv/prod/accounts/runtime` 存在；仅核验记录及字段名，并非连接验收。两个 OAuth 路径未能确认。PostgreSQL `postgresql-superuser` 和 Web SaaS 引用的运行 Secret 尚无对应 V6 ESO 生成声明，不能认定服务可启动。 |
 | Flux、服务及 DNS | ❌ 尚无当前节点 Flux 接管、Vault、数据库、监控、Web SaaS 或 Ingress 实际验收；候选新增独立身份和 Flux 对象就绪回执，各 source/unit revision 分开记录，但接口、数据和用户流程仍需单独验收。V5 与 canonical DNS 保持不变。 |
 
 > 归档日期：2026-10-30（北京时间，UTC+08:00）。
