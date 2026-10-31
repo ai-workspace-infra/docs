@@ -20,15 +20,15 @@ Kubernetes 身份、Flux 接管、全部服务和 Ingress 验收均未完成。�
 `k3s_platform_bootstrap` 编排 K3s 身份 role 交付客户端凭据和 RBAC；不得把 kubeconfig
 或 Kubernetes 权限放进 common。
 
-## 当前调用门禁与 operator 权限（2026-10-31 18:16 Asia/Shanghai）
+## 当前调用门禁与 operator 权限（2026-10-31 18:18 Asia/Shanghai）
 
 | 项目 | 当前状态 | 证据与边界 |
 | --- | --- | --- |
 | Orchestrator Verify 门禁 | ⚠️ [#1587](https://github.com/ai-workspace-infra/Platform-Orchestrator/pull/1587) 已合并；修复 PR [#1589](https://github.com/ai-workspace-infra/Platform-Orchestrator/pull/1589) 检查通过、待合并 | #1589 修复 main push 发现的 owner-contract 表达式缩进问题。main push run [41190998071](https://github.com/ai-workspace-infra/Platform-Orchestrator/actions/runs/41190998071) 成功，但不是生产 `workflow_dispatch`，不表示 IaC apply 或节点部署 |
-| OS operator 登录能力 | ⚠️ Playbooks [#925](https://github.com/ai-workspace-infra/playbooks/pull/925) 检查通过、待合并 | common 在创建时设置 `/bin/bash` 并验证 operator 可启动交互 shell；不新增 sudo、K3s 凭据或 runtime socket。现场 SSH 已验证 operator shell/home 可用 |
+| OS operator 登录能力 | ✅ Playbooks [#925](https://github.com/ai-workspace-infra/playbooks/pull/925) 已合并 | common 在创建时设置 `/bin/bash` 并验证 operator 可启动交互 shell；不新增 sudo、K3s 凭据或 runtime socket。现场 SSH 已验证 operator shell/home 可用；仍需后续完整 common 正式回执 |
 | operator 默认 kubeconfig | ⚠️ Playbooks [#924](https://github.com/ai-workspace-infra/playbooks/pull/924) 检查通过、待合并 | K3s identity role 将默认 `~/.kube/config` 指向 operator 自己的 identity config；现场当前尚无该文件或 K3s 客户端 |
 | K3s operator RBAC | ⚠️ GitOps [#686](https://github.com/ai-workspace-infra/gitops/pull/686) 检查通过、待合并 | 声明业务 namespace 内 Pods、ReplicaSets、Events 状态读取和 Deployment scale-only 写入；拒绝 Secret、日志、exec/attach、工作负载 spec、跨 namespace 和 RBAC 管理 |
-| 生产派发 | ❌ 未执行 | 当前无新的生产 `workflow_dispatch`；无本次 IaC/Playbooks 回执、K3s/Flux 安装或服务调谐。待 #1589、#686、#924、#925 合并后重新派发；live Kubernetes allow/deny 尚无法执行 |
+| 生产派发 | ❌ 未执行 | 当前无新的生产 `workflow_dispatch`；无本次 IaC/Playbooks 回执、K3s/Flux 安装或服务调谐。待 #1589、#686、#924 合并后重新派发；live Kubernetes allow/deny 尚无法执行 |
 
 ## 本轮执行与阻断更新（2026-10-31 17:20 Asia/Shanghai）
 
