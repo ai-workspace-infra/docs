@@ -10,7 +10,7 @@
 | common | ❌ 当前节点尚无包含独立盘和完整安全基线的就绪回执。[Playbooks #916](https://github.com/ai-workspace-infra/playbooks/pull/916) 已将独立盘挂载与 UUID 纳入 K3s 主线 common 回执条件。 |
 | 调用链 | ❌ [Orchestrator #1583](https://github.com/ai-workspace-infra/Platform-Orchestrator/pull/1583) 为草稿候选；候选按 CMDB `deployment_mode` 区分 Kubernetes 与传统 Web SaaS 主机，避免 K3s 进入传统主机部署和凭据初始化；CMDB、GitOps 声明及 K3s owner 交接尚无完整运行回执。 |
 | 三身份与 Vault writer | ❌ [Playbooks #918](https://github.com/ai-workspace-infra/playbooks/pull/918) 和 [GitOps #683](https://github.com/ai-workspace-infra/gitops/pull/683) 为草稿候选；需合并并受控应用 writer 配置，验证精确路径允许、相邻路径拒绝及真实身份 RBAC。 |
-| Flux、服务及 DNS | ❌ 尚无当前节点 Flux 接管、Vault、数据库、监控、Web SaaS 或 Ingress 实际验收；未据历史回执认定完成。V5 与 canonical DNS 保持不变。 |
+| Flux、服务及 DNS | ❌ 尚无当前节点 Flux 接管、Vault、数据库、监控、Web SaaS 或 Ingress 实际验收；候选新增独立身份和 Flux 对象就绪回执，各 source/unit revision 分开记录，但接口、数据和用户流程仍需单独验收。V5 与 canonical DNS 保持不变。 |
 
 > 归档日期：2026-10-30（北京时间，UTC+08:00）。
 >
