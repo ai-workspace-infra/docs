@@ -125,12 +125,12 @@ PostgreSQL、Caddy、Web SaaS 共用 `distributed-web-saas-fullstack` chart 包�
 
 | 阶段 | 状态 | 工作内容 | 放行条件与当前缺口 |
 | --- | --- | --- | --- |
-| 0 Plan 证据、制品与容量准备 | ❌ 未完成 | IaC、GitOps、Playbooks、Orchestrator 默认由 `workflow_dispatch` 选择 `main`；记录本次成功运行解析到的 commit SHA 作为审计证据，不要求基础仓库另行打 tag。业务 chart 与镜像按不可变版本/digest 固定并核实可获取性，再完成渲染资源容量评审 | 最新运行 Resolve、IaC 自检和 Vault 认证通过；资源 plan 被 `create-only` 契约拒绝，提示包含更新、替换或删除，具体资源仍待核对。制品可获取性和全栈容量评审尚未完成。详见第 17.2.3 节 |
-| 1 IaC | ✅ 历史验收通过 | 新建独立节点、卷、网络并产出权威 CMDB | 有创建及归属验证记录；后续续建须刷新资源状态 |
+| 0 Plan 证据、制品与容量准备 | ❌ 未完成 | IaC、GitOps、Playbooks、Orchestrator 默认由 `workflow_dispatch` 选择 `main`；记录本次成功运行解析到的 commit SHA 作为审计证据，不要求基础仓库另行打 tag。业务 chart 与镜像按不可变版本/digest 固定并核实可获取性，再完成渲染资源容量评审 | 新 state 的 [plan](https://github.com/ai-workspace-infra/Platform-Orchestrator/actions/runs/41165140821) 已通过，create 3、update 0、delete 0；业务制品可获取性和全栈容量评审仍缺完整证据。详见 17.2.7。 |
+| 1 IaC | ✅ 新资源已核验 | 新建独立节点、卷、网络并产出权威 CMDB | 新节点及 100 GB 新卷已创建并核验绑定；旧卷保留。IaC #504 合入后须重新生成并核验使用节点名的 CMDB。详见 17.2.7。 |
 | 2 common | ✅ 历史验收通过 | hostname、系统管理/审计身份和主机安全基线 | `COMMON_NODE_VERIFIED`；业务身份须在各服务部署后分别验证 |
-| 3 存储与控制面 | ❌ 完整目标图待验收 | 核实新盘、安装固定 K3s/Flux、加载完整声明 | 基础引导已通过；完整新增 ESO/TLS 图的实际版本和健康仍需核实 |
-| 4 管理根 | ❌ 待核实 | 启用管理 source/root | 现场已 active；当前 revision、generation 和 Ready 未完成验收 |
-| 5 ESO 与 TLS 身份 | ❌ 部分完成 | ESO、专用 SA/RBAC、公共 Vault JWT 身份 | JWT allow/deny 已通过；ESO 实际版本和 Ready、身份声明实际 revision 待核实 |
+| 3 存储与控制面 | ❌ 完整目标图待验收 | 核实新盘、安装固定 K3s/Flux、加载完整声明 | 新节点尚未安装 K3s；需先完成 common 安全基线，再验证新盘、K3s、三身份和 Flux。历史节点引导回执不能复用。 |
+| 4 管理根 | ❌ 待核实 | 启用管理 source/root | 新节点尚未安装 Flux；root/source 实际 revision、generation 和 Ready 均待验收。 |
+| 5 ESO 与 TLS 身份 | ❌ 部分完成 | ESO、专用 SA/RBAC、公共 Vault JWT 身份 | 历史 JWT allow/deny 回执不代表新集群 ESO 已部署；新集群身份、实际版本和 Ready 待验收。 |
 | 6 TLS 同步 | ❌ 未验收 | 生成 `vault-prod/vault-server-tls` | 等待 ExternalSecret Ready、证书链、有效期、SAN 和密钥匹配证据 |
 | 7 Vault | ❌ 未验收 | 新 Raft 存储、初始化、unseal、内部认证 | 无完整运行、恢复材料保管及内部 SecretStore 可用回执 |
 | 8 PostgreSQL | ❌ 未验收 | 新 PVC、空目标库、审查后的 SQL schema 和分权角色 | 无实际版本、schema、权限、连接及恢复路径验收 |
