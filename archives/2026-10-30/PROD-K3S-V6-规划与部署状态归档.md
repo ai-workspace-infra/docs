@@ -608,3 +608,56 @@ GitOps [草稿 PR #673](https://github.com/ai-workspace-infra/gitops/pull/673) �
 [标准 plan 运行 41062767205](https://github.com/ai-workspace-infra/Platform-Orchestrator/actions/runs/41062767205) 的 Resolve 通过，Orchestrator 实际 SHA 为 `85818316dc31c5dec025a25bb4a1c477c06a86d7`，IaC 为 `1761ec99619678ca2b46817c327c3b1b53e8e41b`，GitOps 为 `0b55b1ed5609eeffb75a9f8a799fa4e8cbf19a8b`。Playbooks 仅选择 `main`，尚无执行 SHA 回执。
 
 IaC Vault 角色已同步至受保护 `main`，IaC 自检和凭据读取通过。[IaC 子运行 41062981727](https://github.com/ai-workspace-infra/Platform-Orchestrator/actions/runs/41062981727) 的 resources 阶段报告 `create-only target cannot update, replace or delete existing resources`，因此未产生成功 plan 回执。日志尚未说明受影响资源及具体动作；须核查 plan/state 和目标云资源后决定修复路径。该运行仅为 plan，没有 apply。第 0 阶段仍为 ❌。
+
+#### 17.2.4 最新 IaC plan：独立数据盘存在 update（2026-10-31）
+
+本节记录截至 2026-10-31 北京时间的只读核验，覆盖上文 17.2.1 对即时阻塞的历史判断。GitHub 运行回执与集群、云资源的当前实时状态分开记录。
+
+| 检查项 | 状态 | 证据与范围 |
+| --- | --- | --- |
+| 历史 Vault 角色声明 | ✅ 代码已合并 | Orchestrator [#1573](https://github.com/ai-workspace-infra/Platform-Orchestrator/pull/1573) 已合并；17.2.3 记录后续 Vault 身份与 IaC 自检通过。不能据此推断当前 live role 未发生漂移。 |
+| 历史 resolver 清理 | ✅ 代码已合并 | Orchestrator [#1574](https://github.com/ai-workspace-infra/Platform-Orchestrator/pull/1574) 已合并。 |
+| 最新手动主线 | ❌ 失败 | [41087855158](https://github.com/ai-workspace-infra/Platform-Orchestrator/actions/runs/41087855158)，Orchestrator SHA `85818316dc31c5dec025a25bb4a1c477c06a86d7`；Resolve 成功，IaC & Provision 失败，后续 Deploy、Migrate、Verify 均跳过。 |
+| 失败定位 | ✅ 已定位至资源与动作 | IaC 子运行 [41088084894](https://github.com/ai-workspace-infra/Platform-Orchestrator/actions/runs/41088084894) 为 `plan / prod`。`module.volume_prod_k3s_v6.linode_volume.this` 的计划动作为 `update`，create-only 规则拒绝；日志未给出变更字段和值。不得据此断言具体漂移原因。 |
+| 实际变更 | ✅ 本次 IaC 子运行仅为 plan | 本次未执行 IaC apply；不可由此推断更早运行或当前云端资源状态。 |
+| 脱敏诊断能力 | ✅ 已合并并用于后续 plan | IaC [#500](https://github.com/ai-workspace-infra/iac_modules/pull/500) 合并为 `a804abb100bbdd56536c3d6cd620b9dcfd532401`；仅增加卷变更字段名的白名单诊断，不打印字段值，不放行 update/replace/delete。 |
+| 图表与容量声明 | ✅ GitOps 改动已合并 | GitOps [#674](https://github.com/ai-workspace-infra/gitops/pull/674) 已合并，涉及镜像固定和资源预算；其合入不等于当前私有制品可拉取、2C4G 全栈容量或实际运行已验收。 |
+| 重新部署与验收 | ❌ 未完成 | 最新计划失败；当前节点、数据盘、Terraform state、Flux、服务和专用域名的实时状态尚未在本次核验。历史节点回执不能替代重建后的事实。 |
+
+当时的下一步为合入 IaC #500 并重跑只读 plan；该步骤已完成，见 17.2.5。仍需结合 state 和云资源只读事实核对卷身份、绑定及数据保留，不能绕过 create-only 或对现有持久卷直接更新、替换、删除。诊断 PR 或计划成功均不等同于业务验收。V5 canonical DNS 不得修改；V6 专用记录若另行执行须限定具体目标与范围。
+
+#### 17.2.5 数据盘绑定字段诊断（2026-10-31）
+
+| 检查项 | 状态 | 证据 |
+| --- | --- | --- |
+| 只读主线计划 | ❌ 未通过 | [41163093142](https://github.com/ai-workspace-infra/Platform-Orchestrator/actions/runs/41163093142)，Resolve 成功，IaC 阶段失败；本次输入为 `main`、`plan`、`prod-v6`、`web-saas`、`akamai-cloud`、`manbuzhe2026`、`2C4G`、DNS `none`，外部代理关闭、Stripe Catalog 同步跳过。 |
+| 子运行与候选 | ✅ 已定位 | IaC [41163204362](https://github.com/ai-workspace-infra/Platform-Orchestrator/actions/runs/41163204362)，IaC `a804abb100bbdd56536c3d6cd620b9dcfd532401`，GitOps `f51fe89de1d5b1dae545fbb47e42e20261597ce2`。 |
+| 卷计划变化 | ✅ 字段已定位 | `module.volume_prod_k3s_v6.linode_volume.this` 为 `update`，`changed_fields=["linode_id"]`。诊断未输出原值、新值及是否为未知值，不能断言当前附着的实例或确定它是重新挂载。 |
+| 新集群与新卷 | ❌ 未完成 | 按用户要求，新集群必须使用独立空目标卷。当前既有 state 指向的持久卷不因重新创建节点而自动复用、替换、删除或更新；需先获取脱敏的云端卷身份、节点绑定和 state 事实，再提出可审查的独立新卷及 state 方案。 |
+| 运行边界 | ✅ plan | 未执行 IaC apply、K3s、业务部署、数据迁移或 DNS 更新；未在本轮核实云端资源的当前状态。 |
+
+#### 17.2.6 全新冷启动候选与旧资源只读盘点
+
+| 项目 | 状态 | 证据与处理 |
+| --- | --- | --- |
+| 旧节点 | ✅ 已只读核验 | state 中节点 ID `109556076`；Akamai 查询返回 404，同名节点列表为空。该结果是本次查询时点的事实。 |
+| 旧数据盘 | ✅ 已只读核验，保留 | state 中卷 ID `18794650`、标签 `prod-k3s-v6-data`，记录绑定旧节点；Akamai 实际卷仍存在、100 GB、未附着。不得把这块已有卷当作新空盘。 |
+| 旧防火墙 | ✅ 已只读核验，保留 | `prod-k3s-v6-firewall` 仍存在，ID `227444330`；Linode 防火墙标签必须唯一，fresh candidate 使用新标签。 |
+| 新 state | ✅ 时点只读检查未找到 | `terraform/prod/svc.plus/akamai-cloud/manbuzhe2026/prod-k3s-v6-cold-20261031/terraform.tfstate`；检查与未来 apply 之间可能变化，必须在下一次 plan 中重新核验。 |
+| 新卷和防火墙 | ⏳ PR 待合并 | [GitOps #678](https://github.com/ai-workspace-infra/gitops/pull/678) 声明 `prod-k3s-v6-cold-20261031-data`、`prod-k3s-v6-cold-20261031-fw`；节点 hostname 仍为 `prod-k3s-v6`。旧 state 以只读 persistent migration source 保留；旧卷和防火墙不被该新 state 管理或删除。 |
+| IaC 渲染能力 | ⏳ PR 待合并 | [IaC #502](https://github.com/ai-workspace-infra/iac_modules/pull/502) 允许从 YAML 声明防火墙 label，沿用默认行为并校验 provider 约束。必须先合入 #502，后合入 GitOps #678。 |
+| 离线验证 | ✅ 通过 | Akamai 渲染器 19 项、IaC target catalog 14 项测试通过；目录迁移校验保留 17 个历史 state key；V6 selector 命中新 namespace，渲染产出原 node 名、新 firewall 名和带 `prevent_destroy` 的新 volume module，Terraform fmt 检查通过。 |
+| 实际资源创建、初始化和验收 | ❌ 未执行 | 本次只执行 plan 与读取，不执行 apply、数据迁移或 DNS 操作；两项 PR 合入后仍需重新以 main 解析运行候选、验证独立 state 的实际 plan，再按授权推进创建与冷启动。 |
+
+#### 17.2.7 新 state 的 plan 与基础设施执行（2026-10-31）
+
+| 项目 | 状态 | 证据与范围 |
+| --- | --- | --- |
+| 候选合入 | ✅ 完成 | IaC [#502](https://github.com/ai-workspace-infra/iac_modules/pull/502) 与 GitOps [#678](https://github.com/ai-workspace-infra/gitops/pull/678) 已合并。17.2.6 中的待合并状态为当时记录。 |
+| 新 state plan | ✅ 通过 | [主运行](https://github.com/ai-workspace-infra/Platform-Orchestrator/actions/runs/41165140821)，[IaC 回执](https://github.com/ai-workspace-infra/Platform-Orchestrator/actions/runs/41165237022)：新 state 计划 create 3、update 0、delete 0。此结果只覆盖新 state。 |
+| 解析版本 | ✅ 已记录 | Orchestrator `ea4c859b0d3b72635344a3923dcd8026cb99363a`；IaC `ab85e5ae3bdbc4f2518ae90580d053a0d4a74a35`；GitOps `f36d4d60be137adfb29930df8b59f3fd523c3cc2`。基础仓库默认选 `main`，SHA 为本次运行证据。 |
+| 基础设施 apply | ✅ IaC 子运行及主运行通过 | [主运行](https://github.com/ai-workspace-infra/Platform-Orchestrator/actions/runs/41165583019)，[IaC 回执](https://github.com/ai-workspace-infra/Platform-Orchestrator/actions/runs/41165683851)：`applied_verified`，create 3、update 0、delete 0；`operation=infra`、`dns_mode=none`。主运行成功仅表示该模式的调度完成，不代表跳过的部署步骤已运行。 |
+| 节点与数据盘 | ✅ 已只读核验 | 节点 `prod-k3s-v6`，ID `109736551`，`172.237.24.232`，`jp-tyo-3`，`g6-standard-2`，云端状态 running；新 100 GB 卷 `18830530` 已绑定该节点。旧卷 `18794650` 仍存在且未附着，旧 state 保留。 |
+| OS、K3s、Flux 和服务验收 | ❌ 未完成 | 新节点 SSH 只读检查 hostname 为 `localhost`，尚无 `operator`、`auditor` 或 K3s；[Deploy 子运行](https://github.com/ai-workspace-infra/Platform-Orchestrator/actions/runs/41165920242) 在 infra 模式跳过主机 bootstrap 和业务部署。须执行 `vhosts/common`、K3s bootstrap 与后续验收。 |
+
+下一步入口核对：Playbooks `a669bc21b28888c8445275ef8805a6984751d42d` 中 `prod_k3s_generation_bootstrap.yml` 仍固定 V6 与 `declarative_paused`，其 `node_bootstrap.yml` 仍使用 `cluster-audit`；这与通用批次、Flux 自动调谐及 `root`/`operator`/`auditor` 方案不一致。`os_identity.yml` 是单独的三身份入口，尚未证实由该 bootstrap 正式接入。不能将旧入口的审计检查当作三账户初始化验收，须先贯通并验证实际调用链。
