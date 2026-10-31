@@ -659,3 +659,5 @@ IaC Vault 角色已同步至受保护 `main`，IaC 自检和凭据读取通过�
 | 基础设施 apply | ✅ IaC 子运行及主运行通过 | [主运行](https://github.com/ai-workspace-infra/Platform-Orchestrator/actions/runs/41165583019)，[IaC 回执](https://github.com/ai-workspace-infra/Platform-Orchestrator/actions/runs/41165683851)：`applied_verified`，create 3、update 0、delete 0；`operation=infra`、`dns_mode=none`。主运行成功仅表示该模式的调度完成，不代表跳过的部署步骤已运行。 |
 | 节点与数据盘 | ✅ 已只读核验 | 节点 `prod-k3s-v6`，ID `109736551`，`172.237.24.232`，`jp-tyo-3`，`g6-standard-2`，云端状态 running；新 100 GB 卷 `18830530` 已绑定该节点。旧卷 `18794650` 仍存在且未附着，旧 state 保留。 |
 | OS、K3s、Flux 和服务验收 | ❌ 未完成 | 新节点 SSH 只读检查 hostname 为 `localhost`，尚无 `operator`、`auditor` 或 K3s；[Deploy 子运行](https://github.com/ai-workspace-infra/Platform-Orchestrator/actions/runs/41165920242) 在 infra 模式跳过主机 bootstrap 和业务部署。须执行 `vhosts/common`、K3s bootstrap 与后续验收。 |
+
+下一步入口核对：Playbooks `a669bc21b28888c8445275ef8805a6984751d42d` 中 `prod_k3s_generation_bootstrap.yml` 仍固定 V6 与 `declarative_paused`，其 `node_bootstrap.yml` 仍使用 `cluster-audit`；这与通用批次、Flux 自动调谐及 `root`/`operator`/`auditor` 方案不一致。`os_identity.yml` 是单独的三身份入口，尚未证实由该 bootstrap 正式接入。不能将旧入口的审计检查当作三账户初始化验收，须先贯通并验证实际调用链。
