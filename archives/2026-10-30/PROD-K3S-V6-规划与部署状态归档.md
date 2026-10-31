@@ -1,5 +1,35 @@
 # PROD-K3S-V6 独立节点、集群冷启动规划与部署状态归档
 
+## 最新只读现场核验（2026-10-31 18:16 Asia/Shanghai）
+
+通过 SSH 分别以 `root`、`operator`、`auditor` 登录当前独立节点并执行只读检查。
+此记录是现场观察，不是 Orchestrator / Playbooks 正式回执；检查未修改主机、云资源、数据或 DNS。
+
+| 检查项 | 当前观察 | 状态 |
+| --- | --- | --- |
+| 节点身份 | 主机名 `prod-k3s-v6`；Debian GNU/Linux 13；2 vCPU、约 3.8 GiB 内存 | ✅ 与目标名及 2C4G 规格相符；hostname 检查通过不等于 common 全项验收通过 |
+| OS 三账户 | 三个账户均可 SSH 登录；`operator` shell 为 `/bin/bash`、home 可写，sudo 仅允许 `/usr/bin/systemctl is-system-running`；`auditor` 可读 hostname、不能读 `/etc/shadow` 或写 `/etc`、sudo 被拒绝 | ⚠️ 本次证明了 SSH 登录和有限权限边界；未完成 SSH 认证拒绝矩阵、全面文件/ACL 审计或正式 common 回执 |
+| 主机安全服务 | `ssh` active；`fail2ban`、`auditd`、`ufw` inactive | ❌ 主机安全基线未完成；云防火墙无法由本次 SSH 检查确认，须由 IaC owner 提供证据 |
+| K3s / Flux | `k3s` 和 `kubectl` 命令不存在；K3s service inactive；operator 的 `~/.kube/config` 不存在；无 runtime socket | ❌ K3s 未安装/未运行，Flux 接管与服务部署未开始；无法验收 Kubernetes 身份或 RBAC |
+| 独立数据盘 | 100 GB 块设备 `/dev/sdc` 存在，但无文件系统、无挂载点；根文件系统在独立的约 79.5 GB `/dev/sdb` | ❌ 100 GB 数据盘仍未初始化、挂载或验收；不得将块设备存在写成 common 成功 |
+
+**结论：** OS operator 已能用 SSH 登录并启动普通 shell；K3s 客户端、operator kubeconfig
+和 Kubernetes RBAC 仍未部署。主机安全基线、独立数据盘挂载、K3s 初始化、三套
+Kubernetes 身份、Flux 接管、全部服务和 Ingress 验收均未完成。本次没有进行数据迁移，
+也未启用或修改 V5 / canonical DNS。后续由 `vhosts/common` 负责 OS 身份与主机准备，
+`k3s_platform_bootstrap` 编排 K3s 身份 role 交付客户端凭据和 RBAC；不得把 kubeconfig
+或 Kubernetes 权限放进 common。
+
+## 当前调用门禁与 operator 权限（2026-10-31 18:18 Asia/Shanghai）
+
+| 项目 | 当前状态 | 证据与边界 |
+| --- | --- | --- |
+| Orchestrator Verify 门禁 | ⚠️ [#1587](https://github.com/ai-workspace-infra/Platform-Orchestrator/pull/1587) 已合并；修复 PR [#1589](https://github.com/ai-workspace-infra/Platform-Orchestrator/pull/1589) 检查通过、待合并 | #1589 修复 main push 发现的 owner-contract 表达式缩进问题。main push run [41190998071](https://github.com/ai-workspace-infra/Platform-Orchestrator/actions/runs/41190998071) 成功，但不是生产 `workflow_dispatch`，不表示 IaC apply 或节点部署 |
+| OS operator 登录能力 | ✅ Playbooks [#925](https://github.com/ai-workspace-infra/playbooks/pull/925) 已合并 | common 在创建时设置 `/bin/bash` 并验证 operator 可启动交互 shell；不新增 sudo、K3s 凭据或 runtime socket。现场 SSH 已验证 operator shell/home 可用；仍需后续完整 common 正式回执 |
+| operator 默认 kubeconfig | ⚠️ Playbooks [#924](https://github.com/ai-workspace-infra/playbooks/pull/924) 检查通过、待合并 | K3s identity role 将默认 `~/.kube/config` 指向 operator 自己的 identity config；现场当前尚无该文件或 K3s 客户端 |
+| K3s operator RBAC | ⚠️ GitOps [#686](https://github.com/ai-workspace-infra/gitops/pull/686) 检查通过、待合并 | 声明业务 namespace 内 Pods、ReplicaSets、Events 状态读取和 Deployment scale-only 写入；拒绝 Secret、日志、exec/attach、工作负载 spec、跨 namespace 和 RBAC 管理 |
+| 生产派发 | ❌ 未执行 | 当前无新的生产 `workflow_dispatch`；无本次 IaC/Playbooks 回执、K3s/Flux 安装或服务调谐。待 #1589、#686、#924 合并后重新派发；live Kubernetes allow/deny 尚无法执行 |
+
 ## 本轮执行与阻断更新（2026-10-31 17:20 Asia/Shanghai）
 
 本节优先于下文较早的状态快照。核对来源为 GitHub Actions 与对应 owner PR；本轮没有重新 SSH 登录节点，也没有执行节点初始化、K3s/Flux、服务部署、数据迁移或 DNS 操作。
