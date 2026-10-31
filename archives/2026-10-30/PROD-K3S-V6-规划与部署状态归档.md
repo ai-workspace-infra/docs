@@ -67,6 +67,20 @@
 
 规划提供两个入口：真正的新集群按冷启动流程创建；已有 V6 先核实状态，再续建。**重新规划不意味着重建现有节点、重新格式化数据盘或清空已有数据。**
 
+### 2.1 V6 批次域名分配（2026-10-30）
+
+| 服务 | V6 批次域名 | 访问/路由边界 | DNS/TLS/验收状态 |
+| --- | --- | --- | --- |
+| Console UI | `console-selfhost-prod-v6.svc.plus` | Caddy → `web-saas-console.web-saas-prod.svc.cluster.local:80`；TLS Secret `ingress-prod/console-tls` | Google DoH A 查询为 NXDOMAIN；DNS 未创建；HTTPS/SNI、登录和 runtime `NOT_RUN` |
+| Accounts API/UI | `accounts-selfhost-prod-v6.svc.plus` | Caddy → `web-saas-accounts.web-saas-prod.svc.cluster.local:80`；TLS Secret `ingress-prod/accounts-tls` | Google DoH A 查询为 NXDOMAIN；DNS 未创建；HTTPS/SNI、API 回归、错误率和 runtime `NOT_RUN` |
+| Billing API/UI | `billing-selfhost-prod-v6.svc.plus` | Caddy → `web-saas-billing.web-saas-prod.svc.cluster.local:80`；TLS Secret `ingress-prod/billing-tls` | Google DoH A 查询为 NXDOMAIN；DNS 未创建；TLS、webhook 和 runtime `NOT_RUN`；真实扣款/退款未授权 |
+| PostgreSQL | `postgresql-selfhost-prod-v6.svc.plus` | DNS 解析到 V6 新节点；应用使用集群内 Service DNS，迁移经受控 `migratectl` 连接；不开放公网 DB 端口 | Google DoH A 查询为 NXDOMAIN；待地址确认后新增 DNS；Service、PVC、备份恢复及迁移连接均待部署验收 |
+| Vault | `vault-selfhost-prod-v6.svc.plus` | V6 专属服务/TLS 名称；不通过 Caddy 对公网暴露管理/API。初始 TLS 材料仍从公共 `https://vault.svc.plus` 只读获取 | Google DoH A 查询为 NXDOMAIN；须确认受控证书 SAN、Vault `tlsServerName` 和集群内服务解析后才可放行 |
+| Observability | `observability-k3s-v6.svc.plus` | 保留已声明的 Grafana `rootUrl` 候选；只按 VPN/受限运维通道设计，未配置公开 Caddy 路由 | Google DoH A 查询为 NXDOMAIN；DNS 未创建；入口认证、TLS 和监控 runtime 均待验收 |
+| Content | 暂不分配独立公网域名 | 作为内部服务候选；业务 owner 未确认外部域名/独立 Caddy 路由 | 旧声明 `content-k3s-v6.svc.plus` 不作为本轮分配结果；待确认用途后再决定 |
+
+上述 V6 名称的 Google DoH A 查询均返回 NXDOMAIN。这个结果只记录本次 A 查询，不证明权威区永远不存在记录，也不替代未来的 A/AAAA/CNAME、权威 DNS、解析目标和冲突核查。V6 TLS 证书需独立验证 SAN、有效期、信任链及证书/私钥匹配；GitOps Secret 引用不等于 Secret 已同步。
+
 ## 3. 独立节点与集群目标规格
 
 本节是目标设计。已创建及已验收的范围见第 9 节，不将规格表本身视为运行证据。
@@ -479,9 +493,9 @@ flowchart LR
 - ❌ 用户最新说明旧 V6 节点已删除；本轮未实时盘点残留数据盘、state 或公共 Vault 身份。下次执行先核对这些资源，不直接重新创建同名目标或清理旧记录。
 - ❌ 本次修订未触发创建、部署、数据迁移或 DNS 操作；新目标从 IaC 到业务的验收需重新形成回执。
 
-## 14. PROD-K3S-V6 批次域名规划与验证边界（2026-10-30）
+## 14. PROD-K3S-V6 域名声明与放行状态（2026-10-30）
 
-本节域名方案按用户给出的 V5 现状命名，并把 PROD-K3S-V6 的批次名称与 DNS 开通、服务上线分别管理。**域名分配不代表 DNS 已创建，不代表 TLS 已就绪，也不代表服务已验收。** 用户已要求 V6 专属域名最终解析生效；新增记录须使用新 V6 节点地址，V5 canonical 域名不改，V6 名称不指向 V5。`dns_mode=none` 继续保护 canonical 名称；六个 V6 专属记录另经受控 DNS owner 更新。
+本节记录 V5 参考状态及 DNS 声明/放行边界；具体 V6 批次域名、服务路由和逐项验收状态见第 2.1 节。域名分配按用户给出的 V5 现状命名，并将 PROD-K3S-V6 批次名称与 DNS 开通、服务上线分别管理。**域名分配不代表 DNS 已创建，不代表 TLS 已就绪，也不代表服务已验收。** 新增记录须使用新 V6 节点地址，V5 canonical 域名不改，V6 名称不指向 V5。`dns_mode=none` 继续保护 canonical 名称；V6 专属记录另由受控 DNS owner 更新。
 
 ### 14.1 V5 参考状态（用户提供）
 
@@ -494,23 +508,10 @@ flowchart LR
 
 以上是用户提供的历史状态，不是本轮对 V5 的实时 DNS、TLS 或业务探测结果。
 
-### 14.2 V6 批次域名分配
 
-| 服务 | V6 批次域名 | 访问/路由边界 | DNS/TLS/验收状态 |
-| --- | --- | --- | --- |
-| Console UI | `console-selfhost-prod-v6.svc.plus` | Caddy → `web-saas-console.web-saas-prod.svc.cluster.local:80`；TLS Secret `ingress-prod/console-tls` | Google DoH A 查询为 NXDOMAIN；DNS 未创建；HTTPS/SNI、登录和 runtime `NOT_RUN` |
-| Accounts API/UI | `accounts-selfhost-prod-v6.svc.plus` | Caddy → `web-saas-accounts.web-saas-prod.svc.cluster.local:80`；TLS Secret `ingress-prod/accounts-tls` | Google DoH A 查询为 NXDOMAIN；DNS 未创建；HTTPS/SNI、API 回归、错误率和 runtime `NOT_RUN` |
-| Billing API/UI | `billing-selfhost-prod-v6.svc.plus` | Caddy → `web-saas-billing.web-saas-prod.svc.cluster.local:80`；TLS Secret `ingress-prod/billing-tls` | Google DoH A 查询为 NXDOMAIN；DNS 未创建；TLS、webhook 和 runtime `NOT_RUN`；真实扣款/退款未授权 |
-| PostgreSQL | `postgresql-selfhost-prod-v6.svc.plus` | DNS 解析到 V6 新节点；应用使用集群内 Service DNS，迁移经受控 `migratectl` 连接；不开放公网 DB 端口 | Google DoH A 查询为 NXDOMAIN；待地址确认后新增 DNS；Service、PVC、备份恢复及迁移连接均待部署验收 |
-| Vault | `vault-selfhost-prod-v6.svc.plus` | V6 专属服务/TLS 名称；不通过 Caddy 对公网暴露管理/API。初始 TLS 材料仍从公共 `https://vault.svc.plus` 只读获取 | Google DoH A 查询为 NXDOMAIN；须确认受控证书 SAN、Vault `tlsServerName` 和集群内服务解析后才可放行 |
-| Observability | `observability-k3s-v6.svc.plus` | 保留已声明的 Grafana `rootUrl` 候选；只按 VPN/受限运维通道设计，未配置公开 Caddy 路由 | Google DoH A 查询为 NXDOMAIN；DNS 未创建；入口认证、TLS 和监控 runtime 均待验收 |
-| Content | 暂不分配独立公网域名 | 作为内部服务候选；业务 owner 未确认外部域名/独立 Caddy 路由 | 旧声明 `content-k3s-v6.svc.plus` 不作为本轮分配结果；待确认用途后再决定 |
+### 14.2 声明与放行状态
 
-上述 V6 名称的 Google DoH A 查询均返回 NXDOMAIN。这个结果只记录本次 A 查询，不证明权威区永远不存在记录，也不替代未来的 A/AAAA/CNAME、权威 DNS、解析目标和冲突核查。V6 TLS 证书需独立验证 SAN、有效期、信任链及证书/私钥匹配；GitOps Secret 引用不等于 Secret 已同步。
-
-### 14.3 声明与放行状态
-
-- Console、Accounts、Billing 的 Caddy 路由与节点 `service_domains` 采用本节确认名称；Observability 保留 `observability-k3s-v6.svc.plus`。六个指定域名都需要 DNS 解析到 V6 新节点；PostgreSQL 端口仍关闭，Vault/API 和 Observability 访问仍受入口及认证策略限制；Content 不再以旧名称作为已分配域名。
+- Console、Accounts、Billing 的 Caddy 路由与节点 `service_domains` 采用第 2.1 节确认的名称；Observability 保留 `observability-k3s-v6.svc.plus`。六个指定域名都需要 DNS 解析到 V6 新节点；PostgreSQL 端口仍关闭，Vault/API 和 Observability 访问仍受入口及认证策略限制；Content 不再以旧名称作为已分配域名。
 - GitOps 声明与本节方案已提交 [GitOps PR #672](https://github.com/ai-workspace-infra/gitops/pull/672)，归档提交在 [Docs PR #1](https://github.com/ai-workspace-infra/docs/pull/1)；均待审查。当前没有合并或发布的 V6 域名版本。域名方案进入 PR 不等于 DNS 变更或运行验收。
 - 新增 DNS 前先对 V6 节点 IP 使用 `curl --resolve <host>:443:<V6-IP>` 验证适用的 Host/SNI 和证书；不得跳过证书校验。PostgreSQL 域名解析不代表开放 Caddy 路由或 5432 端口。
 - 新增 V6 专属 DNS 记录是用户已明确提出的目标，但实际改 DNS 尚未执行；`dns_mode=none` 只禁止默认更新 canonical 域名。应由受控 DNS owner 对六个确切 V6 批次名称新增解析，目标取本次 IaC/CMDB 核实的 V6 节点地址；记录只负责名称解析，不自动授权开放 PostgreSQL 端口或 Vault 管理/API。六个不更新的 canonical 名称为 `vault.svc.plus`、`observability.svc.plus`、`console.svc.plus`、`accounts.svc.plus`、`billing.svc.plus` 和 `postgresql.svc.plus`。
@@ -690,3 +691,17 @@ IaC Vault 角色已同步至受保护 `main`，IaC 自检和凭据读取通过�
 | OS、K3s、Flux 和服务验收 | ❌ 未完成 | 新节点 SSH 只读检查 hostname 为 `localhost`，尚无 `operator`、`auditor` 或 K3s；[Deploy 子运行](https://github.com/ai-workspace-infra/Platform-Orchestrator/actions/runs/41165920242) 在 infra 模式跳过主机 bootstrap 和业务部署。须执行 `vhosts/common`、K3s bootstrap 与后续验收。 |
 
 下一步入口核对：Playbooks `a669bc21b28888c8445275ef8805a6984751d42d` 中 `prod_k3s_generation_bootstrap.yml` 仍固定 V6 与 `declarative_paused`，其 `node_bootstrap.yml` 仍使用 `cluster-audit`；这与通用批次、Flux 自动调谐及 `root`/`operator`/`auditor` 方案不一致。`os_identity.yml` 是单独的三身份入口，尚未证实由该 bootstrap 正式接入。不能将旧入口的审计检查当作三账户初始化验收，须先贯通并验证实际调用链。
+
+#### 17.2.8 标准 deploy 派发失败定位与当前门禁（2026-10-31）
+
+| 项目 | 状态 | 证据与范围 |
+| --- | --- | --- |
+| 旧 `plan` 子运行失败 | ✅ 根因已修复 | [父运行 #41186723690](https://github.com/ai-workspace-infra/Platform-Orchestrator/actions/runs/41186723690) 的 Migrate 子运行 [#41186976993](https://github.com/ai-workspace-infra/Platform-Orchestrator/actions/runs/41186976993) 使用了不同于父运行的 Orchestrator 控制版本，`verify-parent` 因 `Stage and parent control revisions do not match` 按契约拒绝；Orchestrator [#1586](https://github.com/ai-workspace-infra/Platform-Orchestrator/pull/1586) 已合并，对 `operation=plan` 跳过空 Migrate 派发，保留 SHA fail-closed 检查。 |
+| 最近一次生产 apply | ❌ Provision 未通过 | [父运行 #41187083044](https://github.com/ai-workspace-infra/Platform-Orchestrator/actions/runs/41187083044) Resolve 成功，IaC & Provision 失败；Deploy、Migrate、Verify 均跳过。失败子运行 [#41187140202](https://github.com/ai-workspace-infra/Platform-Orchestrator/actions/runs/41187140202) 在旧应用凭据预处理步骤登录 Vault 时被 `github-actions-platform-ops-toolkit-prod` 的 `ref` claim 拒绝。 |
+| IaC 结果 | ✅ 已应用且无资源差异 | 子运行回执 `applied_verified`，create/update/delete 均为 0；state 为独立 `prod-k3s-v6-cold-20261031`。这只证明 IaC apply 回执有效，不证明服务部署。 |
+| K3s-only 凭据路径修正 | ✅ 已合并，待新版本运行验证 | Orchestrator [#1585](https://github.com/ai-workspace-infra/Platform-Orchestrator/pull/1585) 已合并，按 CMDB 主机部署模式选择 GitOps K3s 资源，并在 Web SaaS 仅含 Kubernetes 主机时跳过传统原生部署的 Vault 凭据预处理。失败运行早于此修复；需从当前 main 重跑验证。 |
+| Verify 前置条件 | ❌ 待合并 | Orchestrator [#1587](https://github.com/ai-workspace-infra/Platform-Orchestrator/pull/1587) 要求 Resolve、IaC、Deploy 均成功后才运行 Verify；仍为 OPEN。 |
+| K3s bootstrap Vault reader | ❌ 待声明合并及 Vault 配置 | GitOps [#684](https://github.com/ai-workspace-infra/gitops/pull/684) 声明受保护 Deploy workflow 的精确只读身份，仍为 OPEN；专用 role/policy 尚未通过 Vault 管理路径应用，真实路径允许/拒绝测试未做。 |
+| 节点初始化、K3s/Flux 与服务 | ❌ 未由本次运行执行或验收 | #41187083044 在 Provision 失败，未进入 Playbooks 部署阶段；common、100 GB 数据盘、OS 三身份、K3s、Flux、服务就绪和 Ingress 均没有本次运行回执。`dns_mode=none`，未改 DNS；没有数据迁移。 |
+
+**当前放行条件：** 先合并 Orchestrator #1587 和 GitOps #684；按 #684 审核后的声明，通过受控 Vault 管理流程创建专用 reader role/policy，并验证指定路径可读、相邻路径拒绝。满足后从当前 main 重派 `operation=deploy`，不执行迁移，继续记录每个子运行、CMDB 和 Playbooks/Flux 回执。旧失败运行不通过重跑子阶段修补；必须使用新的父运行及其关联证据。
