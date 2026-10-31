@@ -67,6 +67,20 @@
 
 规划提供两个入口：真正的新集群按冷启动流程创建；已有 V6 先核实状态，再续建。**重新规划不意味着重建现有节点、重新格式化数据盘或清空已有数据。**
 
+### 2.1 V6 批次域名分配（2026-10-30）
+
+| 服务 | V6 批次域名 | 访问/路由边界 | DNS/TLS/验收状态 |
+| --- | --- | --- | --- |
+| Console UI | `console-selfhost-prod-v6.svc.plus` | Caddy → `web-saas-console.web-saas-prod.svc.cluster.local:80`；TLS Secret `ingress-prod/console-tls` | Google DoH A 查询为 NXDOMAIN；DNS 未创建；HTTPS/SNI、登录和 runtime `NOT_RUN` |
+| Accounts API/UI | `accounts-selfhost-prod-v6.svc.plus` | Caddy → `web-saas-accounts.web-saas-prod.svc.cluster.local:80`；TLS Secret `ingress-prod/accounts-tls` | Google DoH A 查询为 NXDOMAIN；DNS 未创建；HTTPS/SNI、API 回归、错误率和 runtime `NOT_RUN` |
+| Billing API/UI | `billing-selfhost-prod-v6.svc.plus` | Caddy → `web-saas-billing.web-saas-prod.svc.cluster.local:80`；TLS Secret `ingress-prod/billing-tls` | Google DoH A 查询为 NXDOMAIN；DNS 未创建；TLS、webhook 和 runtime `NOT_RUN`；真实扣款/退款未授权 |
+| PostgreSQL | `postgresql-selfhost-prod-v6.svc.plus` | DNS 解析到 V6 新节点；应用使用集群内 Service DNS，迁移经受控 `migratectl` 连接；不开放公网 DB 端口 | Google DoH A 查询为 NXDOMAIN；待地址确认后新增 DNS；Service、PVC、备份恢复及迁移连接均待部署验收 |
+| Vault | `vault-selfhost-prod-v6.svc.plus` | V6 专属服务/TLS 名称；不通过 Caddy 对公网暴露管理/API。初始 TLS 材料仍从公共 `https://vault.svc.plus` 只读获取 | Google DoH A 查询为 NXDOMAIN；须确认受控证书 SAN、Vault `tlsServerName` 和集群内服务解析后才可放行 |
+| Observability | `observability-k3s-v6.svc.plus` | 保留已声明的 Grafana `rootUrl` 候选；只按 VPN/受限运维通道设计，未配置公开 Caddy 路由 | Google DoH A 查询为 NXDOMAIN；DNS 未创建；入口认证、TLS 和监控 runtime 均待验收 |
+| Content | 暂不分配独立公网域名 | 作为内部服务候选；业务 owner 未确认外部域名/独立 Caddy 路由 | 旧声明 `content-k3s-v6.svc.plus` 不作为本轮分配结果；待确认用途后再决定 |
+
+上述 V6 名称的 Google DoH A 查询均返回 NXDOMAIN。这个结果只记录本次 A 查询，不证明权威区永远不存在记录，也不替代未来的 A/AAAA/CNAME、权威 DNS、解析目标和冲突核查。V6 TLS 证书需独立验证 SAN、有效期、信任链及证书/私钥匹配；GitOps Secret 引用不等于 Secret 已同步。
+
 ## 3. 独立节点与集群目标规格
 
 本节是目标设计。已创建及已验收的范围见第 9 节，不将规格表本身视为运行证据。
@@ -479,9 +493,9 @@ flowchart LR
 - ❌ 用户最新说明旧 V6 节点已删除；本轮未实时盘点残留数据盘、state 或公共 Vault 身份。下次执行先核对这些资源，不直接重新创建同名目标或清理旧记录。
 - ❌ 本次修订未触发创建、部署、数据迁移或 DNS 操作；新目标从 IaC 到业务的验收需重新形成回执。
 
-## 14. PROD-K3S-V6 批次域名规划与验证边界（2026-10-30）
+## 14. PROD-K3S-V6 域名声明与放行状态（2026-10-30）
 
-本节域名方案按用户给出的 V5 现状命名，并把 PROD-K3S-V6 的批次名称与 DNS 开通、服务上线分别管理。**域名分配不代表 DNS 已创建，不代表 TLS 已就绪，也不代表服务已验收。** 用户已要求 V6 专属域名最终解析生效；新增记录须使用新 V6 节点地址，V5 canonical 域名不改，V6 名称不指向 V5。`dns_mode=none` 继续保护 canonical 名称；六个 V6 专属记录另经受控 DNS owner 更新。
+本节记录 V5 参考状态及 DNS 声明/放行边界；具体 V6 批次域名、服务路由和逐项验收状态见第 2.1 节。域名分配按用户给出的 V5 现状命名，并将 PROD-K3S-V6 批次名称与 DNS 开通、服务上线分别管理。**域名分配不代表 DNS 已创建，不代表 TLS 已就绪，也不代表服务已验收。** 新增记录须使用新 V6 节点地址，V5 canonical 域名不改，V6 名称不指向 V5。`dns_mode=none` 继续保护 canonical 名称；V6 专属记录另由受控 DNS owner 更新。
 
 ### 14.1 V5 参考状态（用户提供）
 
@@ -494,23 +508,10 @@ flowchart LR
 
 以上是用户提供的历史状态，不是本轮对 V5 的实时 DNS、TLS 或业务探测结果。
 
-### 14.2 V6 批次域名分配
 
-| 服务 | V6 批次域名 | 访问/路由边界 | DNS/TLS/验收状态 |
-| --- | --- | --- | --- |
-| Console UI | `console-selfhost-prod-v6.svc.plus` | Caddy → `web-saas-console.web-saas-prod.svc.cluster.local:80`；TLS Secret `ingress-prod/console-tls` | Google DoH A 查询为 NXDOMAIN；DNS 未创建；HTTPS/SNI、登录和 runtime `NOT_RUN` |
-| Accounts API/UI | `accounts-selfhost-prod-v6.svc.plus` | Caddy → `web-saas-accounts.web-saas-prod.svc.cluster.local:80`；TLS Secret `ingress-prod/accounts-tls` | Google DoH A 查询为 NXDOMAIN；DNS 未创建；HTTPS/SNI、API 回归、错误率和 runtime `NOT_RUN` |
-| Billing API/UI | `billing-selfhost-prod-v6.svc.plus` | Caddy → `web-saas-billing.web-saas-prod.svc.cluster.local:80`；TLS Secret `ingress-prod/billing-tls` | Google DoH A 查询为 NXDOMAIN；DNS 未创建；TLS、webhook 和 runtime `NOT_RUN`；真实扣款/退款未授权 |
-| PostgreSQL | `postgresql-selfhost-prod-v6.svc.plus` | DNS 解析到 V6 新节点；应用使用集群内 Service DNS，迁移经受控 `migratectl` 连接；不开放公网 DB 端口 | Google DoH A 查询为 NXDOMAIN；待地址确认后新增 DNS；Service、PVC、备份恢复及迁移连接均待部署验收 |
-| Vault | `vault-selfhost-prod-v6.svc.plus` | V6 专属服务/TLS 名称；不通过 Caddy 对公网暴露管理/API。初始 TLS 材料仍从公共 `https://vault.svc.plus` 只读获取 | Google DoH A 查询为 NXDOMAIN；须确认受控证书 SAN、Vault `tlsServerName` 和集群内服务解析后才可放行 |
-| Observability | `observability-k3s-v6.svc.plus` | 保留已声明的 Grafana `rootUrl` 候选；只按 VPN/受限运维通道设计，未配置公开 Caddy 路由 | Google DoH A 查询为 NXDOMAIN；DNS 未创建；入口认证、TLS 和监控 runtime 均待验收 |
-| Content | 暂不分配独立公网域名 | 作为内部服务候选；业务 owner 未确认外部域名/独立 Caddy 路由 | 旧声明 `content-k3s-v6.svc.plus` 不作为本轮分配结果；待确认用途后再决定 |
+### 14.2 声明与放行状态
 
-上述 V6 名称的 Google DoH A 查询均返回 NXDOMAIN。这个结果只记录本次 A 查询，不证明权威区永远不存在记录，也不替代未来的 A/AAAA/CNAME、权威 DNS、解析目标和冲突核查。V6 TLS 证书需独立验证 SAN、有效期、信任链及证书/私钥匹配；GitOps Secret 引用不等于 Secret 已同步。
-
-### 14.3 声明与放行状态
-
-- Console、Accounts、Billing 的 Caddy 路由与节点 `service_domains` 采用本节确认名称；Observability 保留 `observability-k3s-v6.svc.plus`。六个指定域名都需要 DNS 解析到 V6 新节点；PostgreSQL 端口仍关闭，Vault/API 和 Observability 访问仍受入口及认证策略限制；Content 不再以旧名称作为已分配域名。
+- Console、Accounts、Billing 的 Caddy 路由与节点 `service_domains` 采用第 2.1 节确认的名称；Observability 保留 `observability-k3s-v6.svc.plus`。六个指定域名都需要 DNS 解析到 V6 新节点；PostgreSQL 端口仍关闭，Vault/API 和 Observability 访问仍受入口及认证策略限制；Content 不再以旧名称作为已分配域名。
 - GitOps 声明与本节方案已提交 [GitOps PR #672](https://github.com/ai-workspace-infra/gitops/pull/672)，归档提交在 [Docs PR #1](https://github.com/ai-workspace-infra/docs/pull/1)；均待审查。当前没有合并或发布的 V6 域名版本。域名方案进入 PR 不等于 DNS 变更或运行验收。
 - 新增 DNS 前先对 V6 节点 IP 使用 `curl --resolve <host>:443:<V6-IP>` 验证适用的 Host/SNI 和证书；不得跳过证书校验。PostgreSQL 域名解析不代表开放 Caddy 路由或 5432 端口。
 - 新增 V6 专属 DNS 记录是用户已明确提出的目标，但实际改 DNS 尚未执行；`dns_mode=none` 只禁止默认更新 canonical 域名。应由受控 DNS owner 对六个确切 V6 批次名称新增解析，目标取本次 IaC/CMDB 核实的 V6 节点地址；记录只负责名称解析，不自动授权开放 PostgreSQL 端口或 Vault 管理/API。六个不更新的 canonical 名称为 `vault.svc.plus`、`observability.svc.plus`、`console.svc.plus`、`accounts.svc.plus`、`billing.svc.plus` 和 `postgresql.svc.plus`。
