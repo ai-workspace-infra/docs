@@ -635,3 +635,16 @@ IaC Vault 角色已同步至受保护 `main`，IaC 自检和凭据读取通过�
 | 卷计划变化 | ✅ 字段已定位 | `module.volume_prod_k3s_v6.linode_volume.this` 为 `update`，`changed_fields=["linode_id"]`。诊断未输出原值、新值及是否为未知值，不能断言当前附着的实例或确定它是重新挂载。 |
 | 新集群与新卷 | ❌ 未完成 | 按用户要求，新集群必须使用独立空目标卷。当前既有 state 指向的持久卷不因重新创建节点而自动复用、替换、删除或更新；需先获取脱敏的云端卷身份、节点绑定和 state 事实，再提出可审查的独立新卷及 state 方案。 |
 | 运行边界 | ✅ plan | 未执行 IaC apply、K3s、业务部署、数据迁移或 DNS 更新；未在本轮核实云端资源的当前状态。 |
+
+#### 17.2.6 全新冷启动候选与旧资源只读盘点
+
+| 项目 | 状态 | 证据与处理 |
+| --- | --- | --- |
+| 旧节点 | ✅ 已只读核验 | state 中节点 ID `109556076`；Akamai 查询返回 404，同名节点列表为空。该结果是本次查询时点的事实。 |
+| 旧数据盘 | ✅ 已只读核验，保留 | state 中卷 ID `18794650`、标签 `prod-k3s-v6-data`，记录绑定旧节点；Akamai 实际卷仍存在、100 GB、未附着。不得把这块已有卷当作新空盘。 |
+| 旧防火墙 | ✅ 已只读核验，保留 | `prod-k3s-v6-firewall` 仍存在，ID `227444330`；Linode 防火墙标签必须唯一，fresh candidate 使用新标签。 |
+| 新 state | ✅ 时点只读检查未找到 | `terraform/prod/svc.plus/akamai-cloud/manbuzhe2026/prod-k3s-v6-cold-20261031/terraform.tfstate`；检查与未来 apply 之间可能变化，必须在下一次 plan 中重新核验。 |
+| 新卷和防火墙 | ⏳ PR 待合并 | [GitOps #678](https://github.com/ai-workspace-infra/gitops/pull/678) 声明 `prod-k3s-v6-cold-20261031-data`、`prod-k3s-v6-cold-20261031-fw`；节点 hostname 仍为 `prod-k3s-v6`。旧 state 以只读 persistent migration source 保留；旧卷和防火墙不被该新 state 管理或删除。 |
+| IaC 渲染能力 | ⏳ PR 待合并 | [IaC #502](https://github.com/ai-workspace-infra/iac_modules/pull/502) 允许从 YAML 声明防火墙 label，沿用默认行为并校验 provider 约束。必须先合入 #502，后合入 GitOps #678。 |
+| 离线验证 | ✅ 通过 | Akamai 渲染器 19 项、IaC target catalog 14 项测试通过；目录迁移校验保留 17 个历史 state key；V6 selector 命中新 namespace，渲染产出原 node 名、新 firewall 名和带 `prevent_destroy` 的新 volume module，Terraform fmt 检查通过。 |
+| 实际资源创建、初始化和验收 | ❌ 未执行 | 本次只执行 plan 与读取，不执行 apply、数据迁移或 DNS 操作；两项 PR 合入后仍需重新以 main 解析运行候选、验证独立 state 的实际 plan，再按授权推进创建与冷启动。 |
