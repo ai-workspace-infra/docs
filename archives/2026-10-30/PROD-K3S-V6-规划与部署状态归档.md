@@ -668,7 +668,7 @@ IaC Vault 角色已同步至受保护 `main`，IaC 自检和凭据读取通过�
 | --- | --- | --- |
 | 主机名 | ✅ 已验证 | `hostname`、`/etc/hostname` 和本地解析均为 `prod-k3s-v6`；cloud-init 设置 `preserve_hostname: true`。尚未执行重启持久性验证。 |
 | OS 三身份 | ✅ 登录及部分权限检查通过 | 使用 Playbooks main `a669bc21b28888c8445275ef8805a6984751d42d` 的 `vhosts/common` OS 身份任务初始化；`root`、`operator`、`auditor` 均以真实身份 SSH 登录，后两者使用同名主组。operator 仅验证受限 sudo；auditor 验证状态读取、拒绝 sudo、读取 `/etc/shadow` 和写 `/etc`。三账户暂用同一 SSH 公钥，持钥者可登录三个身份。 |
-| 旧审计账户代码 | ⏳ PR 待审 | 新节点不存在旧账号；[Playbooks #896](https://github.com/ai-workspace-infra/playbooks/pull/896) 移除旧创建入口并接入三身份，K3s 身份和其他仓库回执消费仍需单独贯通。 |
+| 旧审计账户代码 | ⏳ PR 待审 | 新节点不存在旧账号；[Playbooks #896](https://github.com/ai-workspace-infra/playbooks/pull/896) 移除旧创建入口并接入三身份；[Orchestrator #1581](https://github.com/ai-workspace-infra/Platform-Orchestrator/pull/1581) 更新回执消费，须按 owner → caller 顺序合并。K3s 身份仍需单独验收。 |
 | 主机安全基线 | ❌ 未完成 | SSH 公钥策略、禁用密码、sshd/sudo 配置语法通过；本次只读检查 `fail2ban`、`auditd`、UFW 服务不活跃，未断言云防火墙配置或完整基线符合性。 |
 | 旧 state 清理 | ❌ 未完成 | 旧 state 对象仍存在，存储桶未显示版本控制；旧卷和防火墙仍存在，GitOps 将旧 state 声明为只读迁移来源。须先完成安全归档、恢复验证及声明/资源所有权处理，不能直接删除后失去追踪。 |
 | K3s、Flux 与业务 | ❌ 未执行 | 三类 Kubernetes 认证/RBAC、服务及业务身份尚未验收。 |
