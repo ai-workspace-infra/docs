@@ -1,5 +1,24 @@
 # PROD-K3S-V6 独立节点、集群冷启动规划与部署状态归档
 
+## 最新只读现场核验（2026-10-31 18:00 Asia/Shanghai）
+
+通过 SSH `root` 对当前独立节点执行只读检查。此记录是现场观察，不是
+Orchestrator / Playbooks 正式回执；检查未修改主机、云资源、数据或 DNS。
+
+| 检查项 | 当前观察 | 状态 |
+| --- | --- | --- |
+| 节点身份 | 主机名 `prod-k3s-v6`；Debian GNU/Linux 13；2 vCPU、约 3.8 GiB 内存 | ✅ 与目标名及 2C4G 规格相符；hostname 检查通过不等于 common 全项验收通过 |
+| OS 三账户 | `root`、`operator`、`auditor` 均存在。`operator` 的 sudo 仅列出 `/usr/bin/systemctl is-system-running`；`auditor` 的 sudo 查询被拒绝 | ⚠️ 只验证了账户和 sudo 列表，未验证三者 SSH 登录/拒绝矩阵、审计读取范围或完整基线 |
+| 主机安全服务 | `ssh` active；`fail2ban`、`auditd`、`ufw` inactive | ❌ 主机安全基线未完成；云防火墙无法由本次 SSH 检查确认，须由 IaC owner 提供证据 |
+| K3s / Flux | `k3s` systemd service inactive，节点上找不到 `k3s` 命令；没有可读取的 Kubernetes API、Flux Kustomization、HelmRelease 或 Pod | ❌ K3s 未安装/未运行，Flux 接管与服务部署未开始 |
+| 独立数据盘 | 100 GB 块设备 `/dev/sdc` 存在，但无文件系统、无挂载点；根文件系统在独立的约 79.5 GB `/dev/sdb` | ❌ 100 GB 数据盘仍未初始化、挂载或验收；不得将块设备存在写成 common 成功 |
+
+**结论：** 当前 SSH 证据显示目标节点仍处于 OS 层；hostname 和 OS 账户存在，
+但主机安全基线、独立数据盘挂载、K3s 初始化、三套 Kubernetes 身份、Flux 接管、
+全部服务和 Ingress 验收均未完成。本次没有进行数据迁移，也未启用或修改 V5 /
+canonical DNS。下一步应由 Playbooks owner 执行 common 安全基线与独立盘就绪，
+保存正式回执后才进入 K3s/Flux bootstrap。
+
 ## 本轮执行与阻断更新（2026-10-31 17:20 Asia/Shanghai）
 
 本节优先于下文较早的状态快照。核对来源为 GitHub Actions 与对应 owner PR；本轮没有重新 SSH 登录节点，也没有执行节点初始化、K3s/Flux、服务部署、数据迁移或 DNS 操作。
