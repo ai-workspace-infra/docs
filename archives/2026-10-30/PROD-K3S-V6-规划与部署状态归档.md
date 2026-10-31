@@ -620,8 +620,18 @@ IaC Vault 角色已同步至受保护 `main`，IaC 自检和凭据读取通过�
 | 最新手动主线 | ❌ 失败 | [41087855158](https://github.com/ai-workspace-infra/Platform-Orchestrator/actions/runs/41087855158)，Orchestrator SHA `85818316dc31c5dec025a25bb4a1c477c06a86d7`；Resolve 成功，IaC & Provision 失败，后续 Deploy、Migrate、Verify 均跳过。 |
 | 失败定位 | ✅ 已定位至资源与动作 | IaC 子运行 [41088084894](https://github.com/ai-workspace-infra/Platform-Orchestrator/actions/runs/41088084894) 为 `plan / prod`。`module.volume_prod_k3s_v6.linode_volume.this` 的计划动作为 `update`，create-only 规则拒绝；日志未给出变更字段和值。不得据此断言具体漂移原因。 |
 | 实际变更 | ✅ 本次 IaC 子运行仅为 plan | 本次未执行 IaC apply；不可由此推断更早运行或当前云端资源状态。 |
-| 脱敏诊断能力 | ⏳ 待合并 | IaC [#500](https://github.com/ai-workspace-infra/iac_modules/pull/500) 仅增加卷变更字段名的白名单诊断，不打印字段值，不放行 update/replace/delete；截至本次核验 PR 开放，相关检查通过。 |
+| 脱敏诊断能力 | ✅ 已合并并用于后续 plan | IaC [#500](https://github.com/ai-workspace-infra/iac_modules/pull/500) 合并为 `a804abb100bbdd56536c3d6cd620b9dcfd532401`；仅增加卷变更字段名的白名单诊断，不打印字段值，不放行 update/replace/delete。 |
 | 图表与容量声明 | ✅ GitOps 改动已合并 | GitOps [#674](https://github.com/ai-workspace-infra/gitops/pull/674) 已合并，涉及镜像固定和资源预算；其合入不等于当前私有制品可拉取、2C4G 全栈容量或实际运行已验收。 |
 | 重新部署与验收 | ❌ 未完成 | 最新计划失败；当前节点、数据盘、Terraform state、Flux、服务和专用域名的实时状态尚未在本次核验。历史节点回执不能替代重建后的事实。 |
 
-下一步：合入并采用 IaC #500 后，以 `main` 解析为本次实际 SHA，按已约定的 `prod-v6` / `web-saas` / `akamai-cloud` / `manbuzhe2026` / `2C4G` 参数执行只读 plan，保留 `dns_mode=none`、关闭外部 Agent Proxy 与 Stripe 同步。使用脱敏字段名称结合 state 和云资源只读事实，判断为何卷计划更新；核对目标卷身份、绑定及数据保留，不能绕过 create-only 或对现有持久卷直接更新、替换、删除。诊断 PR 或计划成功均不等同于业务验收。V5 canonical DNS 不得修改；V6 专用记录若另行执行须限定具体目标与范围。
+当时的下一步为合入 IaC #500 并重跑只读 plan；该步骤已完成，见 17.2.5。仍需结合 state 和云资源只读事实核对卷身份、绑定及数据保留，不能绕过 create-only 或对现有持久卷直接更新、替换、删除。诊断 PR 或计划成功均不等同于业务验收。V5 canonical DNS 不得修改；V6 专用记录若另行执行须限定具体目标与范围。
+
+#### 17.2.5 数据盘绑定字段诊断（2026-10-31）
+
+| 检查项 | 状态 | 证据 |
+| --- | --- | --- |
+| 只读主线计划 | ❌ 未通过 | [41163093142](https://github.com/ai-workspace-infra/Platform-Orchestrator/actions/runs/41163093142)，Resolve 成功，IaC 阶段失败；本次输入为 `main`、`plan`、`prod-v6`、`web-saas`、`akamai-cloud`、`manbuzhe2026`、`2C4G`、DNS `none`，外部代理关闭、Stripe Catalog 同步跳过。 |
+| 子运行与候选 | ✅ 已定位 | IaC [41163204362](https://github.com/ai-workspace-infra/Platform-Orchestrator/actions/runs/41163204362)，IaC `a804abb100bbdd56536c3d6cd620b9dcfd532401`，GitOps `f51fe89de1d5b1dae545fbb47e42e20261597ce2`。 |
+| 卷计划变化 | ✅ 字段已定位 | `module.volume_prod_k3s_v6.linode_volume.this` 为 `update`，`changed_fields=["linode_id"]`。诊断未输出原值、新值及是否为未知值，不能断言当前附着的实例或确定它是重新挂载。 |
+| 新集群与新卷 | ❌ 未完成 | 按用户要求，新集群必须使用独立空目标卷。当前既有 state 指向的持久卷不因重新创建节点而自动复用、替换、删除或更新；需先获取脱敏的云端卷身份、节点绑定和 state 事实，再提出可审查的独立新卷及 state 方案。 |
+| 运行边界 | ✅ plan | 未执行 IaC apply、K3s、业务部署、数据迁移或 DNS 更新；未在本轮核实云端资源的当前状态。 |
