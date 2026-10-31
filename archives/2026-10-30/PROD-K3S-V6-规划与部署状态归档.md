@@ -1,5 +1,21 @@
 # PROD-K3S-V6 独立节点、集群冷启动规划与部署状态归档
 
+## 本轮执行与阻断更新（2026-10-31 17:20 Asia/Shanghai）
+
+本节优先于下文较早的状态快照。核对来源为 GitHub Actions 与对应 owner PR；本轮没有重新 SSH 登录节点，也没有执行节点初始化、K3s/Flux、服务部署、数据迁移或 DNS 操作。
+
+| 阶段 | 当前状态 | 证据与结论 |
+| --- | --- | --- |
+| IaC/CMDB | ✅ 最近一次 owner 回执通过，资源无变化 | [完整流水线 41187083044](https://github.com/ai-workspace-infra/Platform-Orchestrator/actions/runs/41187083044) 的 IaC 子运行 [41187178349](https://github.com/ai-workspace-infra/Platform-Orchestrator/actions/runs/41187178349) 返回 `applied_verified`，create/update/delete 均为 0；回执含 1 个 K3s 目标及 100 GB 数据卷 CMDB。此结果只说明云资源收敛，不表示数据盘已有文件系统或已挂载。基础仓库解析 SHA：Orchestrator `97810aa8f2818c3b9c44c70ee5e2ebc575981d71`、IaC `7539663f9eb63d86466179d538578146922ed476`、GitOps `2179623e932df7d5083ff6c8c8b9b1baed64dcc2`。 |
+| 主机初始化 | ❌ 未运行 | 同次流水线 `[2/5] Provision` 在访问 legacy Vault role `github-actions-platform-ops-toolkit-prod` 时因 JWT `ref` 不匹配而失败，未进入 Playbooks common；K3s bootstrap 与后续阶段均跳过。运行参数为 `dns_mode=none`，没有 V5/canonical DNS 操作。 |
+| Orchestrator 调用修复 | ❌ PR 待合并 | [Orchestrator #1585](https://github.com/ai-workspace-infra/Platform-Orchestrator/pull/1585) 已通过检查但仍为 OPEN。修复目标是 K3s 走 CMDB catalog → GitOps 节点声明交接，并跳过传统 Web SaaS 主机的 Vault 凭据预处理。 |
+| 公共 Vault bootstrap reader | ❌ 声明与调用待合并/应用 | [GitOps #684](https://github.com/ai-workspace-infra/gitops/pull/684) 与 [Playbooks #920](https://github.com/ai-workspace-infra/playbooks/pull/920) 检查已通过但仍为 OPEN。GitOps 声明 V6 精确只读 SSH/OS 公钥记录；Playbooks common 以 HTTPS API 消费 Vault token，不依赖 runner 安装 Vault CLI。受控管理员尚未应用该 reader role，真实 JWT allow/deny 未验收。 |
+| ESO、PostgreSQL 与应用密钥 | ❌ 仍有配置缺口 | [GitOps #685](https://github.com/ai-workspace-infra/gitops/pull/685) 头提交 `c96fa526f6cd610eec6113109673229a1d8ce099` 的检查已通过但 PR 仍为 Draft；Gitleaks 误报已按精确 commit/path/rule/line 豁免。该候选暂不启用 PostgreSQL exporter，且 Accounts/Billing 数据库运行凭据与实际数据库角色尚未形成完整同步/授权链；不得用 admin 凭据替代。 |
+| PostgreSQL exporter 制品 | ❌ PR 与 release 未完成 | [Artifacts #253](https://github.com/ai-workspace-infra/artifacts/pull/253) 要求 exporter 使用独立用户名与 Secret，禁止回退到 admin/auditor；chart 计划升级到 umbrella `0.2.14` / PostgreSQL subchart `0.1.7`。本机 `.github/scripts/check-web-saas-charts.sh` 通过，GitHub chart 检查当时仍在运行；尚未合并、发布或固定到 GitOps。 |
+| Flux 与服务验收 | ❌ 未开始 | 本轮主线在 Vault 预处理处失败，Flux 接管、Vault 初始化/手动 unseal、PostgreSQL、Observability、Web SaaS、Ingress 及运行/业务验收均无新回执。 |
+
+**下一步顺序**：等待 #1585、#684、#920 合并；对照合并后的 GitOps `main` 受控应用 V6 bootstrap reader role/policy；确认 #685 的应用 DB 凭据合同和 exporter 身份方案，并在 Artifacts chart PR 发布后更新 digest；随后用最新主线 SHA 重跑完整 `deploy`。common 通过 hostname、三账户、主机基线和独立盘 UUID/挂载验收之前，不放行 K3s bootstrap。
+
 ## 当前状态补充（2026-10-31）
 
 以下记录覆盖下文与当前节点冲突的历史状态；历史回执不代表当前节点验收通过。
